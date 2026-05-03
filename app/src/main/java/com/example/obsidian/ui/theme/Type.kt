@@ -32,7 +32,7 @@ val Typography = Typography(
     labelSmall = TextStyle(
         fontFamily = SpaceGrotesk,
         fontWeight = FontWeight.Bold,
-        fontSize = 16.sp,
+        fontSize = 12.sp,
         letterSpacing = 0.1.sp
     ),
     displaySmall = TextStyle(
