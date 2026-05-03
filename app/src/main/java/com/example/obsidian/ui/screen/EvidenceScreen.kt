@@ -1,6 +1,5 @@
 package com.example.obsidian.ui.screen
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -13,7 +12,8 @@ import com.example.obsidian.ui.components.CyberBottomBar
 @Composable
 fun EvidenceScreen(navController: NavController, modifier: Modifier = Modifier) {
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
+        containerColor = Color(0xFF09090B),
         bottomBar = {
             CyberBottomBar(navController)
         }
@@ -21,14 +21,13 @@ fun EvidenceScreen(navController: NavController, modifier: Modifier = Modifier) 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .background(Color(0xFF09090B)),
+                .padding(innerPadding),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "Evidence Screen Content",
                 color = Color.White,
-                style = MaterialTheme.typography.headlineMedium
+                style = MaterialTheme.typography.displayLarge
             )
         }
     }
