@@ -9,26 +9,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.NavController
+import com.example.obsidian.ui.theme.*
 
 @Composable
-fun SettingsScreen(
-    onBack: () -> Unit
-) {
-    val darkNavy = Color(0xFF030617)
-    val deepBlack = Color(0xFF000000)
-    val neonYellow = Color(0xFFFFF05A)
-    val mutedText = Color(0xFF7F8EA3)
-
-    // UI state (local only)
+fun SettingsScreen(navController: NavController, modifier: Modifier = Modifier) {
     var soundEffects by remember { mutableStateOf(true) }
     var music by remember { mutableStateOf(true) }
     var vibration by remember { mutableStateOf(false) }
@@ -37,20 +25,15 @@ fun SettingsScreen(
     var savedMessageVisible by remember { mutableStateOf(false) }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .background(brush = Brush.verticalGradient(listOf(darkNavy, deepBlack)))
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(DarkNavy, DeepBlack)))
             .padding(20.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Title
             Text(
                 text = "SYSTEM SETTINGS",
-                style = TextStyle(
-                    color = neonYellow,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.ExtraBold
-                ),
+                style = MaterialTheme.typography.headlineLarge.copy(color = neonYellow),
                 modifier = Modifier
                     .padding(vertical = 8.dp)
                     .fillMaxWidth(),
@@ -59,54 +42,49 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Options container
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(4.dp)
                     .shadow(6.dp, RoundedCornerShape(12.dp)),
-                color = Color(0xFF06070A)
+                color = SettingsSurface
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // Sound Effects
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Sound Effects", color = Color.White)
+                        Text("Sound Effects", color = Color.White, style = MaterialTheme.typography.bodyLarge)
                         Switch(checked = soundEffects, onCheckedChange = { soundEffects = it })
                     }
 
-                    Divider(modifier = Modifier.padding(vertical = 8.dp), color = mutedText.copy(alpha = 0.12f))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MutedText.copy(alpha = 0.12f))
 
-                    // Music
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Music", color = Color.White)
+                        Text("Music", color = Color.White, style = MaterialTheme.typography.bodyLarge)
                         Switch(checked = music, onCheckedChange = { music = it })
                     }
 
-                    Divider(modifier = Modifier.padding(vertical = 8.dp), color = mutedText.copy(alpha = 0.12f))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MutedText.copy(alpha = 0.12f))
 
-                    // Vibration
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Vibration", color = Color.White)
+                        Text("Vibration", color = Color.White, style = MaterialTheme.typography.bodyLarge)
                         Switch(checked = vibration, onCheckedChange = { vibration = it })
                     }
 
-                    Divider(modifier = Modifier.padding(vertical = 12.dp), color = mutedText.copy(alpha = 0.12f))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MutedText.copy(alpha = 0.12f))
 
-                    // Text Speed
-                    Text("Text Speed", color = mutedText, fontFamily = FontFamily.Monospace)
+                    Text("Text Speed", color = MutedText, style = MaterialTheme.typography.labelLarge)
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -116,20 +94,19 @@ fun SettingsScreen(
                             Button(
                                 onClick = { textSpeed = s },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (selected) neonYellow else Color(0xFF0B0F14),
+                                    containerColor = if (selected) neonYellow else ButtonDark,
                                     contentColor = if (selected) Color.Black else Color.White
                                 ),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text(s)
+                                Text(s, style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
 
-                    Divider(modifier = Modifier.padding(vertical = 12.dp), color = mutedText.copy(alpha = 0.12f))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MutedText.copy(alpha = 0.12f))
 
-                    // Difficulty
-                    Text("Difficulty", color = mutedText, fontFamily = FontFamily.Monospace)
+                    Text("Difficulty", color = MutedText, style = MaterialTheme.typography.labelLarge)
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val levels = listOf("Easy", "Normal", "Hard")
@@ -138,12 +115,12 @@ fun SettingsScreen(
                             Button(
                                 onClick = { difficulty = lvl },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (selected) neonYellow else Color(0xFF0B0F14),
+                                    containerColor = if (selected) neonYellow else ButtonDark,
                                     contentColor = if (selected) Color.Black else Color.White
                                 ),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text(lvl)
+                                Text(lvl, style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
@@ -152,30 +129,28 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Buttons row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceAround
             ) {
                 OutlinedButton(
-                    onClick = { onBack() },
+                    onClick = { navController.popBackStack() },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = neonYellow),
                     border = BorderStroke(1.dp, neonYellow)
                 ) {
-                    Text("BACK")
+                    Text("BACK", style = MaterialTheme.typography.labelLarge)
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
                     Button(
                         onClick = {
-                            // Save settings in local UI state (no persistence requested)
                             savedMessageVisible = true
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black)
                     ) {
-                        Text("SAVE SETTINGS")
+                        Text("SAVE SETTINGS", style = MaterialTheme.typography.labelLarge)
                     }
 
                     if (savedMessageVisible) {
@@ -183,7 +158,7 @@ fun SettingsScreen(
                         Text(
                             text = "Settings saved successfully",
                             color = neonYellow,
-                            fontSize = 12.sp
+                            style = MaterialTheme.typography.displaySmall
                         )
                     }
                 }
@@ -191,11 +166,3 @@ fun SettingsScreen(
         }
     }
 }
-
-@Preview(showBackground = true)
-@Composable
-private fun SettingsPreview() {
-    SettingsScreen(onBack = {})
-}
-
-

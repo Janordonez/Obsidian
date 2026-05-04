@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -14,4 +15,5 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Evidence: Screen("evidence_screen", "Evidence", Icons.Default.Email)
     object Interrogation: Screen("interrogation_screen", "Interrogation", Icons.Default.Person)
     object Map: Screen("map_screen", "Map", Icons.Default.LocationOn)
+    object Settings: Screen("settings_screen", "Settings", Icons.Default.Settings)
 }

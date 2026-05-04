@@ -7,21 +7,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavController
-import com.example.obsidian.ui.components.CyberBottomBar
+import com.example.obsidian.ui.theme.Zinc950
 
 @Composable
 fun ClueScreen(navController: NavController, modifier: Modifier = Modifier) {
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = Color(0xFF09090B),
-        bottomBar = {
-            CyberBottomBar(navController)
-        }
-    ) { innerPadding ->
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = Zinc950
+    ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             Text(
