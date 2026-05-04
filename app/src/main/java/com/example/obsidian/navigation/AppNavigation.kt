@@ -19,7 +19,15 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         startDestination = Screen.Case.route,
         modifier = modifier
     ) {
-        composable(Screen.Case.route) { CaseScreen(navController, modifier) }
+        composable(Screen.Case.route) {
+            CaseScreen(
+                onTabSelected = { screen ->
+                    navController.navigate(screen.route) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
         composable(Screen.Clue.route) { ClueScreen(navController, modifier) }
         composable(Screen.Evidence.route) { EvidenceScreen(navController, modifier) }
         composable(Screen.Interrogation.route) { InterrogationScreen(navController, modifier) }
