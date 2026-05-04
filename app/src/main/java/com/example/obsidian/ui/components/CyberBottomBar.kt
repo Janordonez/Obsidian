@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -24,77 +23,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.obsidian.navigation.Screen
 
 @Composable
 fun CyberBottomBar(navController: NavController) {
-    val items = listOf(
-        Screen.Case,
-        Screen.Clue,
-        Screen.Evidence,
-        Screen.Interrogation,
-        Screen.Map
-    )
-
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-
-    Surface(
-        color = Color(0xFF09090B).copy(alpha = 0.95f),
-        modifier = Modifier.height(80.dp),
-        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
-    ) {
-        androidx.compose.foundation.layout.Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            items.forEach { screen ->
-                val isSelected = currentRoute == screen.route
-                val scale by androidx.compose.animation.core.animateFloatAsState(if (isSelected) 1f else 0.9f)
-
-                androidx.compose.foundation.layout.Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(80.dp)
-                        .clickable {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.startDestinationId)
-                                launchSingleTop = true
-                            }
-                        }
-                        .drawWithContent {
-                            drawContent()
-                            if (isSelected) {
-                                drawLine(
-                                    color = Color(0xFF00F0FF),
-                                    start = Offset(0f, 0f),
-                                    end = Offset(size.width, 0f),
-                                    strokeWidth = 4.dp.toPx()
-                                )
-                            }
-                        }
-                        .graphicsLayer(scaleX = scale, scaleY = scale)
-                        .background(if (isSelected) Color(0xFF002022).copy(alpha = 0.2f) else Color.Transparent),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    androidx.compose.material3.Icon(
-                        imageVector = screen.icon,
-                        contentDescription = null,
-                        tint = if (isSelected) Color(0xFF00F0FF) else Color(0xFF52525B),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = screen.label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) Color(0xFF00F0FF) else Color(0xFF52525B)
-                    )
-                }
-            }
-        }
-    }
+    CyberBottomBar(selectedScreen = Screen.Case, onScreenSelected = {})
 }
 
 @Composable
@@ -121,13 +54,26 @@ fun CyberBottomBar(
                     selected = selectedScreen == screen,
                     onClick = { onScreenSelected(screen) },
                     icon = {
-                        androidx.compose.material3.Icon(
-                            imageVector = screen.icon,
-                            contentDescription = screen.label
+                        Text(
+                            text = when (screen) {
+                                Screen.Case -> "Case"
+                                Screen.Clue -> "Clue"
+                                Screen.Evidence -> "Evidence"
+                                Screen.Interrogation -> "Talk"
+                                Screen.Map -> "Map"
+                            }
                         )
                     },
                     label = {
-                        Text(text = screen.label)
+                        Text(
+                            text = when (screen) {
+                                Screen.Case -> "Case"
+                                Screen.Clue -> "Clue"
+                                Screen.Evidence -> "Evidence"
+                                Screen.Interrogation -> "Talk"
+                                Screen.Map -> "Map"
+                            }
+                        )
                     },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = Color(0xFF00F0FF),
