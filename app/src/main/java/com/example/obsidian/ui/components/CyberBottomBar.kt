@@ -14,11 +14,22 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.obsidian.navigation.Screen
+import com.example.obsidian.ui.theme.primary
 
+/**
+ * Una barra de navegación inferior personalizada con estética "cyber" para la aplicación.
+ *
+ * Este componente muestra una lista de destinos de navegación definidos por la clase [Screen].
+ * Presenta un diseño oscuro con efectos visuales de neón, incluyendo una animación de escala
+ * para el elemento seleccionado y una línea indicadora en la parte superior.
+ *
+ * @param navController El [NavController] encargado de gestionar la navegación y el estado de la pila de retroceso.
+ */
 @Composable
 fun CyberBottomBar(navController: NavController) {
     val items = listOf(
@@ -64,7 +75,7 @@ fun CyberBottomBar(navController: NavController) {
                             drawContent()
                             if (isSelected) {
                                 drawLine(
-                                    color = Color(0xFF00F0FF),
+                                    color = primary,
                                     start = Offset(0f, 0f),
                                     end = Offset(size.width, 0f),
                                     strokeWidth = 4.dp.toPx()
@@ -79,13 +90,13 @@ fun CyberBottomBar(navController: NavController) {
                     Icon(
                         imageVector = screen.icon,
                         contentDescription = null,
-                        tint = if (isSelected) Color(0xFF00F0FF) else Color(0xFF52525B), // zinc-600
+                        tint = if (isSelected) primary else Color(0xFF52525B), // zinc-600
                         modifier = Modifier.size(24.dp)
                     )
                     Text(
                         text = screen.label,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) Color(0xFF00F0FF) else Color(0xFF52525B)
+                        color = if (isSelected) primary else Color(0xFF52525B)
                     )
                 }
             }

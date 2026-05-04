@@ -55,7 +55,9 @@ val neutral090 = Color(0xFFDAE2FD)
 val neutral100 = Color(0xFFEEF0FF)
 
 
-
+val Purple80 = Color(0xFFD0BCFF)
+val PurpleGrey80 = Color(0xFFCCC2DC)
+val Pink80 = Color(0xFFEFB8C8)
 
 
 

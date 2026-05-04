@@ -21,6 +21,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Color(0xFF09090B) // zinc-950
                 ) {
+
                     AppNavigation()
                 }
             }
