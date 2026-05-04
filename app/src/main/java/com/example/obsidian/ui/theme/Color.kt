@@ -59,3 +59,12 @@ val neutral100 = Color(0xFFEEF0FF)
 
 
 
+val Purple40 = Color(0xFF6650a4)
+val PurpleGrey40 = Color(0xFF625b71)
+val Pink40 = Color(0xFF7D5260)
+
+val CyanNeon = Color(0xFF00F0FF)
+val CyanDark = Color(0xFF00363A)
+val SurfaceDark = Color(0xFF131315)
+val OnSurfaceVariant = Color(0xFFB9CACB)
+val BackgroundNoir = Color(0xFF0E0E10)
