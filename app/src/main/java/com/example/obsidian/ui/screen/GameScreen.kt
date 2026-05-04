@@ -46,7 +46,7 @@ fun GameScreen() {
                 when (selectedScreen) {
                     Screen.Case -> CaseScreen(onTabSelected = { selectedScreen = it })
                     Screen.Clue -> CluePlaceholderScreen()
-                    Screen.Evidence -> EvidencePlaceholderScreen()
+                    Screen.Evidence -> EvidenceBoardScreen()
                     Screen.Interrogation -> InterrogationPlaceholderScreen()
                     Screen.Map -> MapPlaceholderScreen()
                 }
