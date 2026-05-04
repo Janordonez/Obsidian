@@ -69,7 +69,6 @@ fun CaseScreen(navController: NavController, modifier: Modifier = Modifier) {
                             // Detectar zoom y paneo del tablón completo
                             detectTransformGestures { _, pan, zoom, _ ->
 
-                                scale.value *= zoom
                                 offset.value += pan
                             }
                         }
