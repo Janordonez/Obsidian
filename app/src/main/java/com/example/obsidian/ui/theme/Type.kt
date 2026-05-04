@@ -9,6 +9,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.obsidian.R
 
+val SpaceGrotesk = FontFamily(
+    Font(R.font.spacegrotesk_medium, FontWeight.Medium),
+    Font(R.font.spacegrotesk_bold, FontWeight.Bold),
+    Font(R.font.spacegrotesk_light, FontWeight.Light),
+
+    )
 // Set of Material typography styles to start with
 val spaceGroteskFamily = FontFamily(
     Font(R.font.spacegrotesk_regular, FontWeight.Normal),
@@ -26,6 +32,26 @@ val Typography = Typography(
         letterSpacing = 0.5.sp
     ),
 
+    displayLarge = TextStyle(
+        fontFamily = SpaceGrotesk,
+        fontWeight = FontWeight.Bold,
+        fontSize = 32.sp,
+        letterSpacing = (-0.02).sp
+    ),
+    labelSmall = TextStyle(
+        fontFamily = SpaceGrotesk,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp,
+        letterSpacing = 0.1.sp
+    ),
+    displaySmall = TextStyle(
+        fontFamily = SpaceGrotesk,
+        fontWeight = FontWeight.Light,
+        fontSize = 12.sp,
+        letterSpacing = 0.1.sp
+    )
+)
+    /* Other default text styles to override
     titleLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
@@ -44,4 +70,4 @@ val Typography = Typography(
         letterSpacing = 0.5.sp
     )
     */
-)
+
