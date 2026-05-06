@@ -19,49 +19,59 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.obsidian.ui.theme.BackgroundNoir
 import com.example.obsidian.ui.theme.CyanNeon
 import com.example.obsidian.ui.theme.neonYellow
 import com.example.obsidian.ui.theme.SurfaceDark
+import com.example.obsidian.ui.viewmodel.GameViewModel
 
 @Composable
-fun EvidenceScreen(navController: NavController, modifier: Modifier = Modifier) {
-    val suspects = listOf("Elias Vance", "Mara Quinn", "Victor Hale", "Lena Crowe")
-    val clues = listOf(
-        "Black sedan near the dock",
-        "Torn black glove",
-        "Anonymous audio call",
-        "Missing archive key",
-        "Partial fingerprint"
-    )
+fun EvidenceScreen(
+    navController: NavController, 
+    viewModel: GameViewModel,
+    modifier: Modifier = Modifier
+) {
+    val gameCase by viewModel.currentCase.collectAsStateWithLifecycle()
+    val deductionAnalysis by viewModel.deductionAnalysis.collectAsStateWithLifecycle()
+    val isAnalyzing = viewModel.isAnalyzing
+
+    val suspects = gameCase?.suspects ?: emptyList()
+    val clues = gameCase?.clues ?: emptyList()
 
     var selectedClue by remember { mutableStateOf<String?>(null) }
-    var deductionMessage by remember { mutableStateOf("") }
+    
+    // Key is Suspect Name, Value is list of Clue titles
     var assignedCluesBySuspect by remember {
-        mutableStateOf(
-            suspects.associateWith { emptyList<String>() }
-        )
+        mutableStateOf(emptyMap<String, List<String>>())
     }
 
-    fun assignClueToSuspect(suspect: String) {
-        val clue = selectedClue ?: return
+    fun assignClueToSuspect(suspectName: String) {
+        val clueTitle = selectedClue ?: return
 
-        val updatedMap = suspects.associateWith { currentSuspect ->
-            val cluesForSuspect = assignedCluesBySuspect[currentSuspect].orEmpty()
-            if (currentSuspect == suspect) {
-                (cluesForSuspect + clue).distinct()
-            } else {
-                cluesForSuspect.filterNot { it == clue }
-            }
+        val updatedMap = assignedCluesBySuspect.toMutableMap()
+        
+        // Remove clue from any other suspect first
+        assignedCluesBySuspect.forEach { (name, list) ->
+            updatedMap[name] = list.filterNot { it == clueTitle }
         }
+
+        val currentClues = updatedMap[suspectName] ?: emptyList()
+        updatedMap[suspectName] = (currentClues + clueTitle).distinct()
 
         assignedCluesBySuspect = updatedMap
         selectedClue = null
-        deductionMessage = "$clue assigned to $suspect"
     }
 
     val scrollState = rememberScrollState()
+
+    if (gameCase == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No hay expediente activo", color = Color.Gray)
+        }
+        return
+    }
 
     Column(
         modifier = modifier
@@ -118,9 +128,9 @@ fun EvidenceScreen(navController: NavController, modifier: Modifier = Modifier) 
                 )
 
                 clues.forEach { clue ->
-                    val isSelected = clue == selectedClue
+                    val isSelected = clue.title == selectedClue
                     Button(
-                        onClick = { selectedClue = clue },
+                        onClick = { selectedClue = clue.title },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -138,7 +148,7 @@ fun EvidenceScreen(navController: NavController, modifier: Modifier = Modifier) 
                                 tint = if (isSelected) Color.Black else neonYellow
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = clue)
+                            Text(text = clue.title)
                         }
                     }
                 }
@@ -161,7 +171,7 @@ fun EvidenceScreen(navController: NavController, modifier: Modifier = Modifier) 
                 )
 
                 suspects.forEach { suspect ->
-                    val assignedClues = assignedCluesBySuspect[suspect].orEmpty()
+                    val assignedClues = assignedCluesBySuspect[suspect.name].orEmpty()
 
                     Card(
                         colors = CardDefaults.cardColors(containerColor = SurfaceDark),
@@ -169,7 +179,7 @@ fun EvidenceScreen(navController: NavController, modifier: Modifier = Modifier) 
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                assignClueToSuspect(suspect)
+                                assignClueToSuspect(suspect.name)
                             }
                     ) {
                         Column(
@@ -185,7 +195,7 @@ fun EvidenceScreen(navController: NavController, modifier: Modifier = Modifier) 
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = suspect,
+                                    text = suspect.name,
                                     color = Color.White,
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                                 )
@@ -216,55 +226,35 @@ fun EvidenceScreen(navController: NavController, modifier: Modifier = Modifier) 
             }
         }
 
-        Text(
-            text = if (assignedCluesBySuspect.values.sumOf { it.size } >= 3) {
-                "Ready for deduction analysis"
-            } else {
-                "Need more assigned clues before analysis"
-            },
-            color = CyanNeon,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-        )
-
         Button(
             onClick = {
-                val totalAssignedClues = assignedCluesBySuspect.values.sumOf { it.size }
-                deductionMessage = if (totalAssignedClues >= 3) {
-                    "Deduction accepted. New lead unlocked."
-                } else {
-                    "Deduction incomplete. Keep investigating."
-                }
+                viewModel.analyzeDeductions(assignedCluesBySuspect)
             },
             modifier = Modifier.fillMaxWidth(),
+            enabled = !isAnalyzing && assignedCluesBySuspect.values.any { it.isNotEmpty() },
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = neonYellow,
                 contentColor = Color.Black
             )
         ) {
-            Icon(
-                imageVector = if (assignedCluesBySuspect.values.sumOf { it.size } >= 3) {
-                    Icons.Default.Check
-                } else {
-                    Icons.Default.Warning
-                },
-                contentDescription = null
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "ANALYZE DEDUCTION",
-                fontWeight = FontWeight.Bold
-            )
+            if (isAnalyzing) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.Black)
+            } else {
+                Icon(imageVector = Icons.Default.Check, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "ANALYZE DEDUCTION", fontWeight = FontWeight.Bold)
+            }
         }
 
-        if (deductionMessage.isNotBlank()) {
+        if (deductionAnalysis.isNotBlank()) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = BackgroundNoir),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = deductionMessage,
+                    text = deductionAnalysis,
                     color = CyanNeon,
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                     modifier = Modifier.padding(16.dp)

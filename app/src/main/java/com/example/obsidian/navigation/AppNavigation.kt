@@ -8,10 +8,12 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.obsidian.ui.screen.*
+import com.example.obsidian.ui.viewmodel.GameViewModel
 
 @Composable
 fun AppNavigation(
     navController: NavHostController,
+    viewModel: GameViewModel,
     modifier: Modifier = Modifier,
     innerPadding: PaddingValues = PaddingValues()
 ) {
@@ -22,7 +24,11 @@ fun AppNavigation(
     ) {
         composable(Screen.Case.route) {
             MainMenu(
-                onNewInvestigation = { navController.navigate(Screen.Clue.route) },
+                isGenerating = viewModel.isGenerating,
+                onNewInvestigation = { 
+                    viewModel.startNewInvestigation()
+                    navController.navigate(Screen.Map.route)
+                },
                 onContinueCase = { navController.navigate(Screen.Evidence.route) },
                 onSettings = { navController.navigate(Screen.Settings.route) }
             )
@@ -31,13 +37,13 @@ fun AppNavigation(
             ClueScreen(navController, Modifier.padding(innerPadding)) 
         }
         composable(Screen.Evidence.route) { 
-            EvidenceScreen(navController, Modifier.padding(innerPadding)) 
+            EvidenceScreen(navController, viewModel, Modifier.padding(innerPadding))
         }
         composable(Screen.Interrogation.route) { 
-            InterrogationScreen(navController, Modifier.padding(innerPadding)) 
+            InterrogationScreen(navController, viewModel, Modifier.padding(innerPadding)) 
         }
         composable(Screen.Map.route) { 
-            MapScreen(navController, Modifier.padding(innerPadding)) 
+            MapScreen(navController, viewModel, Modifier.padding(innerPadding))
         }
         composable(Screen.Settings.route) { 
             SettingsScreen(navController, Modifier.padding(innerPadding)) 
