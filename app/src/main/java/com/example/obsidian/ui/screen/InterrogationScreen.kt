@@ -338,9 +338,9 @@ fun SuspectPortraitCard(suspect: AISuspect) {
                         shape = RoundedCornerShape(2.dp)
                     ) {
                         Text(
-                            text = "SUJETO: ${suspect.id}",
+                            text = suspect.relation.uppercase(),
                             color = Color.Black,
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
@@ -381,10 +381,11 @@ fun SuspectPortraitCard(suspect: AISuspect) {
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "${suspect.alias} - CASO ${suspect.caseNumber}",
+                        text = suspect.alibi.uppercase(),
                         color = Color.Gray,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 12.sp
                     )
                 }
             }
@@ -428,7 +429,7 @@ fun ConversationLog(suspect: AISuspect, messages: List<InterrogationMessage>) {
                             Text(text = msg.time, color = Color.DarkGray, fontSize = 10.sp)
                         } else {
                             Text(text = msg.time, color = Color.DarkGray, fontSize = 10.sp)
-                            Text(text = if (msg.sender == suspect.id) suspect.alias else msg.sender, color = CyanNeon, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(text = if (msg.sender == suspect.id) suspect.name else msg.sender, color = CyanNeon, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
