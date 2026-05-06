@@ -11,7 +11,7 @@ class GeminiService(apiKey: String) {
     private val cleanApiKey = apiKey.replace(" ", "").replace("\n", "").trim()
 
     private val generativeModel = GenerativeModel(
-        modelName = "gemini-2.0-pro",
+        modelName = "gemini-2.5-flash",
         apiKey = cleanApiKey,
     )
 
@@ -78,7 +78,7 @@ class GeminiService(apiKey: String) {
         strategy: String
     ): String {
         val chatModel = GenerativeModel(
-            modelName = "gemini-2.0-pro",
+            modelName = "gemini-2.5-flash",
             apiKey = cleanApiKey,
         )
 
