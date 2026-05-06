@@ -27,7 +27,7 @@ fun AppNavigation(
                 isGenerating = viewModel.isGenerating,
                 onNewInvestigation = { 
                     viewModel.startNewInvestigation()
-                    navController.navigate(Screen.Interrogation.route) 
+                    navController.navigate(Screen.Map.route)
                 },
                 onContinueCase = { navController.navigate(Screen.Evidence.route) },
                 onSettings = { navController.navigate(Screen.Settings.route) }
