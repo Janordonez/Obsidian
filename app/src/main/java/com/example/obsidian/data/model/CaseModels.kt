@@ -14,16 +14,17 @@ data class GameCase(
 data class AISuspect(
     val id: String,
     val name: String,
-    val alias: String,
+    val gender: String, // "MALE" or "FEMALE"
     val personality: String,
     val background: String,
+    val relation: String, // E.g., "Esposa del asesinado"
     val tension: Float,
     val status: String,
     val bpm: Int,
     val caseNumber: String,
     val room: String,
     val alibi: String = "",
-    val imageId: Int = 0 // Will map to a real R.drawable ID in the ViewModel
+    val imageId: Int = 0 
 )
 
 @Serializable
@@ -34,6 +35,7 @@ data class AIClue(
     val latitude: Double,
     val longitude: Double,
     val description: String,
+    val ownerSuspectId: String, // The ID of the suspect this clue incriminates
     val isFound: Boolean = false
 )
 
