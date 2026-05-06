@@ -25,8 +25,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -50,33 +53,68 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.example.obsidian.R
+import com.example.obsidian.data.model.AISuspect
+import com.example.obsidian.data.model.InterrogationMessage
 import com.example.obsidian.ui.theme.*
+import com.example.obsidian.ui.viewmodel.GameViewModel
 
-
-data class Suspect(
-    val id: String,
-    val name: String,
-    val alias: String,
-    val imageRes: Int,
-    val tension: Float,
-    val status: String,
-    val bpm: Int,
-    val caseNumber: String,
-    val room: String
-)
-
-val suspects = listOf(
-    Suspect("ALPHA-09", "ELIAS VANCE", "Principal Sospechoso", R.drawable.sus3, 0.74f, "HOSTIL", 112, "#2904", "SALA A - SECTOR 7"),
-    Suspect("BETA-12", "MARA SOLIS", "Testigo Clave", R.drawable.susfemale1, 0.45f, "NERVIOSA", 95, "#2905", "SALA B - SECTOR 7"),
-    Suspect("GAMMA-05", "VICTOR KANE", "Ex-Convicto", R.drawable.sus1, 0.88f, "AGRESIVO", 125, "#2906", "SALA C - SECTOR 3"),
-    Suspect("DELTA-07", "LENA ROSS", "Informante", R.drawable.susfemale2, 0.30f, "COOPERATIVA", 78, "#2907", "SALA D - SECTOR 1")
-)
 
 @Composable
-fun InterrogationScreen(navController: NavHostController, modifier: Modifier = Modifier) {
+fun InterrogationScreen(
+    navController: NavHostController, 
+    viewModel: GameViewModel,
+    modifier: Modifier = Modifier
+) {
+    val gameCase by viewModel.currentCase.collectAsStateWithLifecycle()
+    val allMessages by viewModel.messages.collectAsStateWithLifecycle()
+    val isGenerating = viewModel.isGenerating
+    val error = viewModel.errorMessage
+    
+    val suspects = gameCase?.suspects ?: emptyList()
+    
+    if (isGenerating) {
+        Box(modifier = Modifier.fillMaxSize().background(BackgroundNoir), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(color = CyanNeon)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("GENERANDO EXPEDIENTE...", color = CyanNeon, fontWeight = FontWeight.Bold)
+            }
+        }
+        return
+    }
+
+    if (error != null) {
+        Box(modifier = Modifier.fillMaxSize().background(BackgroundNoir), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+                Icon(Icons.Default.Bolt, contentDescription = null, tint = AggressiveRed, modifier = Modifier.size(48.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(error, color = Color.White, textAlign = TextAlign.Center)
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = { viewModel.startNewInvestigation() },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyanNeon, contentColor = Color.Black)
+                ) {
+                    Text("REINTENTAR")
+                }
+            }
+        }
+        return
+    }
+
+    if (suspects.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No hay expediente activo", color = Color.Gray)
+        }
+        return
+    }
+
     var selectedSuspect by remember { mutableStateOf(suspects[0]) }
+    val currentMessages = allMessages[selectedSuspect.id] ?: emptyList()
+    var userText by remember { mutableStateOf("") }
+    var currentStrategy by remember { mutableStateOf("NEUTRAL") }
 
     Column(
         modifier = modifier
@@ -86,6 +124,7 @@ fun InterrogationScreen(navController: NavHostController, modifier: Modifier = M
     ) {
         // Header con Selector de Sospechosos
         SuspectSelector(
+            suspects = suspects,
             selectedSuspect = selectedSuspect,
             onSuspectSelected = { selectedSuspect = it }
         )
@@ -103,7 +142,7 @@ fun InterrogationScreen(navController: NavHostController, modifier: Modifier = M
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "OBSIDIAN CASE FILE",
+                    text = gameCase?.title ?: "OBSIDIAN CASE FILE",
                     color = CyanNeon,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Bold,
@@ -123,12 +162,43 @@ fun InterrogationScreen(navController: NavHostController, modifier: Modifier = M
 
             // Conversation Log
             Box(modifier = Modifier.weight(1f)) {
-                ConversationLog(selectedSuspect)
+                ConversationLog(selectedSuspect, currentMessages)
+            }
+
+            // Input field
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.TextField(
+                    value = userText,
+                    onValueChange = { userText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Escribe tu pregunta...", color = Color.Gray) },
+                    colors = androidx.compose.material3.TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Black,
+                        unfocusedContainerColor = Color.Black,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                androidx.compose.material3.IconButton(
+                    onClick = {
+                        if (userText.isNotBlank()) {
+                            viewModel.sendMessage(selectedSuspect, userText, currentStrategy)
+                            userText = ""
+                        }
+                    },
+                    modifier = Modifier.background(CyanNeon, RoundedCornerShape(4.dp))
+                ) {
+                    Icon(Icons.Default.Waves, contentDescription = "Enviar", tint = Color.Black)
+                }
             }
 
             // Estrategia de Interrogatorio
             Text(
-                text = "ESTRATEGIA DE INTERROGATORIO",
+                text = "ESTRATEGIA DE INTERROGATORIO: $currentStrategy",
                 color = Color.Gray,
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(top = 8.dp)
@@ -143,6 +213,8 @@ fun InterrogationScreen(navController: NavHostController, modifier: Modifier = M
                     subtitle = "Empatía / Calma",
                     color = CyanNeon,
                     icon = Icons.Default.Waves,
+                    isSelected = currentStrategy == "PASIVO",
+                    onClick = { currentStrategy = "PASIVO" },
                     modifier = Modifier.weight(1f)
                 )
                 StrategyButton(
@@ -150,6 +222,8 @@ fun InterrogationScreen(navController: NavHostController, modifier: Modifier = M
                     subtitle = "Lógica / Hechos",
                     color = Color.Gray,
                     icon = Icons.Default.Balance,
+                    isSelected = currentStrategy == "NEUTRAL",
+                    onClick = { currentStrategy = "NEUTRAL" },
                     modifier = Modifier.weight(1f)
                 )
                 StrategyButton(
@@ -157,6 +231,8 @@ fun InterrogationScreen(navController: NavHostController, modifier: Modifier = M
                     subtitle = "Presión / Amenaza",
                     color = AggressiveRed,
                     icon = Icons.Default.Bolt,
+                    isSelected = currentStrategy == "AGRESIVO",
+                    onClick = { currentStrategy = "AGRESIVO" },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -166,8 +242,9 @@ fun InterrogationScreen(navController: NavHostController, modifier: Modifier = M
 
 @Composable
 fun SuspectSelector(
-    selectedSuspect: Suspect,
-    onSuspectSelected: (Suspect) -> Unit
+    suspects: List<AISuspect>,
+    selectedSuspect: AISuspect,
+    onSuspectSelected: (AISuspect) -> Unit
 ) {
     LazyRow(
         modifier = Modifier
@@ -194,7 +271,7 @@ fun SuspectSelector(
                         )
                 ) {
                     Image(
-                        painter = painterResource(id = suspect.imageRes),
+                        painter = painterResource(id = if (suspect.imageId != 0) suspect.imageId else R.drawable.sus1),
                         contentDescription = suspect.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -213,7 +290,7 @@ fun SuspectSelector(
 }
 
 @Composable
-fun SuspectPortraitCard(suspect: Suspect) {
+fun SuspectPortraitCard(suspect: AISuspect) {
     Card(
         colors = CardDefaults.cardColors(containerColor = PanelColor),
         shape = RoundedCornerShape(8.dp),
@@ -225,7 +302,7 @@ fun SuspectPortraitCard(suspect: Suspect) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Imagen de fondo
             Image(
-                painter = painterResource(id = suspect.imageRes),
+                painter = painterResource(id = if (suspect.imageId != 0) suspect.imageId else R.drawable.sus1),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -315,19 +392,8 @@ fun SuspectPortraitCard(suspect: Suspect) {
     }
 }
 
-data class Message(val sender: String, val text: String, val isDetective: Boolean, val time: String)
-
 @Composable
-fun ConversationLog(suspect: Suspect) {
-    val messages = remember(suspect) {
-        listOf(
-            Message("SISTEMA", "INTERROGATORIO INICIADO - 14:02:11", false, ""),
-            Message("INVESTIGADOR", "Sabemos que estuviste en los muelles anoche, ${suspect.name.split(" ").first()}. Las cámaras no mienten. ¿Qué estabas buscando realmente?", true, "14:02:45"),
-            Message(suspect.id, "Solo estaba tomando aire. No es un crimen caminar cerca del agua, ¿verdad oficial?", false, "14:03:12"),
-            Message("INVESTIGADOR", "Nadie toma aire en el Almacén 4 a las tres de la mañana con un inhibidor de señal en el bolsillo. Danos algo útil.", true, "14:04:30")
-        )
-    }
-
+fun ConversationLog(suspect: AISuspect, messages: List<InterrogationMessage>) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -362,7 +428,7 @@ fun ConversationLog(suspect: Suspect) {
                             Text(text = msg.time, color = Color.DarkGray, fontSize = 10.sp)
                         } else {
                             Text(text = msg.time, color = Color.DarkGray, fontSize = 10.sp)
-                            Text(text = msg.sender, color = CyanNeon, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(text = if (msg.sender == suspect.id) suspect.alias else msg.sender, color = CyanNeon, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -391,14 +457,25 @@ fun ConversationLog(suspect: Suspect) {
 }
 
 @Composable
-fun StrategyButton(title: String, subtitle: String, color: Color, icon: ImageVector, modifier: Modifier = Modifier) {
+fun StrategyButton(
+    title: String, 
+    subtitle: String, 
+    color: Color, 
+    icon: ImageVector, 
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Surface(
-        onClick = { /* Acción TODO */ },
+        onClick = onClick,
         modifier = modifier
             .height(68.dp),
         shape = RoundedCornerShape(4.dp),
-        color = Color.Black,
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.3f))
+        color = if (isSelected) color.copy(alpha = 0.2f) else Color.Black,
+        border = androidx.compose.foundation.BorderStroke(
+            if (isSelected) 2.dp else 1.dp, 
+            color.copy(alpha = if (isSelected) 0.8f else 0.3f)
+        )
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 2.dp),
