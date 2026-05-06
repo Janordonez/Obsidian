@@ -5,17 +5,25 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
 import com.example.obsidian.R
 import com.example.obsidian.data.model.*
 import com.example.obsidian.data.remote.GeminiService
+import com.example.obsidian.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
 import java.util.*
 
-class GameViewModel : ViewModel() {
-    private val geminiService = GeminiService("AIzaSyDe79sTsakaUay70KpdtQSs_mw37OtnZeA")
+class GameViewModel(application: Application) : AndroidViewModel(application) {
+    private val geminiService = GeminiService(BuildConfig.GEMINI_API_KEY)
+    private val sharedPrefs = application.getSharedPreferences("obsidian_prefs", Context.MODE_PRIVATE)
+    private val json = Json { ignoreUnknownKeys = true }
     
     private val _currentCase = MutableStateFlow<GameCase?>(null)
     val currentCase = _currentCase.asStateFlow()
@@ -29,20 +37,35 @@ class GameViewModel : ViewModel() {
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
-    private val suspectImages = listOf(
-        R.drawable.sus1,
-        R.drawable.sus3,
-        R.drawable.susfemale1,
-        R.drawable.susfemale2,
-        R.drawable.femalesus1,
-        R.drawable.femalesus2,
-        R.drawable.malesus1,
-        R.drawable.malesus2,
-        R.drawable.malesus3,
-        R.drawable.malesus4,
-        R.drawable.femalesus3,
-        R.drawable.femalesus4
-    )
+    private val maleImages = listOf(R.drawable.sus1, R.drawable.sus3, R.drawable.malesus1, R.drawable.malesus2, R.drawable.malesus3, R.drawable.malesus4)
+    private val femaleImages = listOf(R.drawable.susfemale1, R.drawable.susfemale2, R.drawable.femalesus1, R.drawable.femalesus2, R.drawable.femalesus3, R.drawable.femalesus4)
+
+    init {
+        loadSavedCase()
+    }
+
+    private fun loadSavedCase() {
+        val savedCaseJson = sharedPrefs.getString("current_case", null)
+        if (savedCaseJson != null) {
+            try {
+                val savedCase = json.decodeFromString<GameCase>(savedCaseJson)
+                _currentCase.value = savedCase
+                
+                // Load messages if any (could also be saved, but let's start with the case)
+                val initialMessages = savedCase.suspects.associate { it.id to listOf(
+                    InterrogationMessage("SISTEMA", "INTERROGATORIO REANUDADO", false, getCurrentTime())
+                ) }
+                _messages.value = initialMessages
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun saveCase(gameCase: GameCase) {
+        val caseJson = json.encodeToString(gameCase)
+        sharedPrefs.edit().putString("current_case", caseJson).apply()
+    }
 
     fun startNewInvestigation() {
         viewModelScope.launch {
@@ -51,11 +74,20 @@ class GameViewModel : ViewModel() {
             try {
                 val newCase = geminiService.generateCase()
                 if (newCase != null) {
-                    // Map images to suspects
-                    val mappedSuspects = newCase.suspects.mapIndexed { index, suspect ->
-                        suspect.copy(imageId = suspectImages.getOrElse(index) { R.drawable.sus1 })
+                    var maleIdx = 0
+                    var femaleIdx = 0
+                    
+                    val mappedSuspects = newCase.suspects.map { suspect ->
+                        val imageId = if (suspect.gender.uppercase() == "FEMALE") {
+                            femaleImages.getOrElse(femaleIdx++) { femaleImages[0] }
+                        } else {
+                            maleImages.getOrElse(maleIdx++) { maleImages[0] }
+                        }
+                        suspect.copy(imageId = imageId)
                     }
-                    _currentCase.value = newCase.copy(suspects = mappedSuspects)
+                    val finalCase = newCase.copy(suspects = mappedSuspects)
+                    _currentCase.value = finalCase
+                    saveCase(finalCase)
                     
                     // Initialize messages
                     val initialMessages = mappedSuspects.associate { it.id to listOf(
