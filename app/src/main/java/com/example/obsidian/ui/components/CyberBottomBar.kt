@@ -14,22 +14,12 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.obsidian.navigation.Screen
-import com.example.obsidian.ui.theme.primary
+import com.example.obsidian.ui.theme.*
 
-/**
- * Una barra de navegación inferior personalizada con estética "cyber" para la aplicación.
- *
- * Este componente muestra una lista de destinos de navegación definidos por la clase [Screen].
- * Presenta un diseño oscuro con efectos visuales de neón, incluyendo una animación de escala
- * para el elemento seleccionado y una línea indicadora en la parte superior.
- *
- * @param navController El [NavController] encargado de gestionar la navegación y el estado de la pila de retroceso.
- */
 @Composable
 fun CyberBottomBar(navController: NavController) {
     val items = listOf(
@@ -37,17 +27,17 @@ fun CyberBottomBar(navController: NavController) {
         Screen.Clue,
         Screen.Evidence,
         Screen.Interrogation,
-        Screen.Map
+        Screen.Map,
+        Screen.Settings
     )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Contenedor principal de la barra
     Surface(
-        color = Color(0xFF09090B).copy(alpha = 0.95f), // zinc-950
+        color = Zinc950.copy(alpha = 0.95f),
         modifier = Modifier.height(80.dp),
-        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f)) // Borde superior sutil
+        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -56,8 +46,6 @@ fun CyberBottomBar(navController: NavController) {
         ) {
             items.forEach { screen ->
                 val isSelected = currentRoute == screen.route
-
-                // Efecto de escala al interactuar
                 val scale by animateFloatAsState(if (isSelected) 1f else 0.9f)
 
                 Column(
@@ -70,12 +58,11 @@ fun CyberBottomBar(navController: NavController) {
                                 launchSingleTop = true
                             }
                         }
-                        // Borde superior azul si está seleccionado
                         .drawWithContent {
                             drawContent()
                             if (isSelected) {
                                 drawLine(
-                                    color = primary,
+                                    color = CyanNeon,
                                     start = Offset(0f, 0f),
                                     end = Offset(size.width, 0f),
                                     strokeWidth = 4.dp.toPx()
@@ -83,20 +70,20 @@ fun CyberBottomBar(navController: NavController) {
                             }
                         }
                         .graphicsLayer(scaleX = scale, scaleY = scale)
-                        .background(if (isSelected) Color(0xFF002022).copy(alpha = 0.2f) else Color.Transparent),
+                        .background(if (isSelected) CyberCyanTint.copy(alpha = 0.2f) else Color.Transparent),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     Icon(
                         imageVector = screen.icon,
                         contentDescription = null,
-                        tint = if (isSelected) primary else Color(0xFF52525B), // zinc-600
+                        tint = if (isSelected) CyanNeon else Zinc600,
                         modifier = Modifier.size(24.dp)
                     )
                     Text(
                         text = screen.label,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) primary else Color(0xFF52525B)
+                        color = if (isSelected) CyanNeon else Zinc600
                     )
                 }
             }
