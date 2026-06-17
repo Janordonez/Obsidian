@@ -21,10 +21,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.example.obsidian.navigation.Screen
 import com.example.obsidian.ui.theme.BackgroundNoir
 import com.example.obsidian.ui.theme.CyanNeon
 import com.example.obsidian.ui.theme.neonYellow
 import com.example.obsidian.ui.theme.SurfaceDark
+import com.example.obsidian.ui.theme.AggressiveRed
 import com.example.obsidian.ui.viewmodel.GameViewModel
 
 @Composable
@@ -40,27 +42,12 @@ fun EvidenceScreen(
     val suspects = gameCase?.suspects ?: emptyList()
     val clues = gameCase?.clues ?: emptyList()
 
+    val clueAssignments by viewModel.clueAssignments.collectAsStateWithLifecycle()
     var selectedClue by remember { mutableStateOf<String?>(null) }
-    
-    // Key is Suspect Name, Value is list of Clue titles
-    var assignedCluesBySuspect by remember {
-        mutableStateOf(emptyMap<String, List<String>>())
-    }
 
     fun assignClueToSuspect(suspectName: String) {
         val clueTitle = selectedClue ?: return
-
-        val updatedMap = assignedCluesBySuspect.toMutableMap()
-        
-        // Remove clue from any other suspect first
-        assignedCluesBySuspect.forEach { (name, list) ->
-            updatedMap[name] = list.filterNot { it == clueTitle }
-        }
-
-        val currentClues = updatedMap[suspectName] ?: emptyList()
-        updatedMap[suspectName] = (currentClues + clueTitle).distinct()
-
-        assignedCluesBySuspect = updatedMap
+        viewModel.assignClueToSuspect(suspectName, clueTitle)
         selectedClue = null
     }
 
@@ -171,7 +158,7 @@ fun EvidenceScreen(
                 )
 
                 suspects.forEach { suspect ->
-                    val assignedClues = assignedCluesBySuspect[suspect.name].orEmpty()
+                    val assignedClues = clueAssignments[suspect.name].orEmpty()
 
                     Card(
                         colors = CardDefaults.cardColors(containerColor = SurfaceDark),
@@ -226,12 +213,13 @@ fun EvidenceScreen(
             }
         }
 
+        // Analyze deduction button
         Button(
             onClick = {
-                viewModel.analyzeDeductions(assignedCluesBySuspect)
+                viewModel.analyzeDeductions(clueAssignments)
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !isAnalyzing && assignedCluesBySuspect.values.any { it.isNotEmpty() },
+            enabled = !isAnalyzing && clueAssignments.values.any { it.isNotEmpty() },
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = neonYellow,
@@ -260,6 +248,27 @@ fun EvidenceScreen(
                     modifier = Modifier.padding(16.dp)
                 )
             }
+        }
+
+        // Accusation navigation button
+        val allCluesAssigned = viewModel.allCluesAssigned()
+        Button(
+            onClick = {
+                navController.navigate(Screen.Accusation.route)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = allCluesAssigned,
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AggressiveRed,
+                contentColor = Color.White,
+                disabledContainerColor = Color.DarkGray,
+                disabledContentColor = Color.Gray
+            )
+        ) {
+            Icon(imageVector = Icons.Default.Warning, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = "PRESENTAR ACUSACIÓN →", fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(8.dp))

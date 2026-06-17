@@ -3,26 +3,35 @@ package com.example.obsidian.ui.screen
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.obsidian.ui.theme.*
+import com.example.obsidian.ui.viewmodel.GameViewModel
 
 @Composable
-fun SettingsScreen(navController: NavController, modifier: Modifier = Modifier) {
-    var soundEffects by remember { mutableStateOf(true) }
-    var music by remember { mutableStateOf(true) }
-    var vibration by remember { mutableStateOf(false) }
-    var textSpeed by remember { mutableStateOf("Normal") }
-    var difficulty by remember { mutableStateOf("Normal") }
+fun SettingsScreen(
+    navController: NavController, 
+    viewModel: GameViewModel,
+    modifier: Modifier = Modifier
+) {
     var savedMessageVisible by remember { mutableStateOf(false) }
+    val currentCase by viewModel.currentCase.collectAsState()
+    val scrollState = rememberScrollState()
 
     Box(
         modifier = modifier
@@ -50,80 +59,104 @@ fun SettingsScreen(navController: NavController, modifier: Modifier = Modifier) 
                     .shadow(6.dp, RoundedCornerShape(12.dp)),
                 color = SettingsSurface
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Sound Effects", color = Color.White, style = MaterialTheme.typography.bodyLarge)
-                        Switch(checked = soundEffects, onCheckedChange = { soundEffects = it })
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MutedText.copy(alpha = 0.12f))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Music", color = Color.White, style = MaterialTheme.typography.bodyLarge)
-                        Switch(checked = music, onCheckedChange = { music = it })
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MutedText.copy(alpha = 0.12f))
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .verticalScroll(scrollState)
+                ) {
+                    // --- Audio Settings ---
+                    Text(
+                        text = "AUDIO CONFIGURATION",
+                        color = CyanNeon,
+                        style = MaterialTheme.typography.labelMedium,
+                        letterSpacing = 2.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Vibration", color = Color.White, style = MaterialTheme.typography.bodyLarge)
-                        Switch(checked = vibration, onCheckedChange = { vibration = it })
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.VolumeUp, contentDescription = null, tint = MutedText, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sound Effects", color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                        }
+                        Switch(
+                            checked = viewModel.isEffectsEnabled, 
+                            onCheckedChange = { viewModel.isEffectsEnabled = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = CyanNeon)
+                        )
                     }
+                    
+                    Slider(
+                        value = viewModel.effectsVolume,
+                        onValueChange = { viewModel.effectsVolume = it },
+                        colors = SliderDefaults.colors(thumbColor = CyanNeon, activeTrackColor = CyanDark)
+                    )
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MutedText.copy(alpha = 0.12f))
-
-                    Text("Text Speed", color = MutedText, style = MaterialTheme.typography.labelLarge)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val speeds = listOf("Slow", "Normal", "Fast")
-                        speeds.forEach { s ->
-                            val selected = s == textSpeed
-                            Button(
-                                onClick = { textSpeed = s },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (selected) neonYellow else ButtonDark,
-                                    contentColor = if (selected) Color.Black else Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text(s, style = MaterialTheme.typography.labelLarge)
-                            }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = MutedText, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Atmospheric Music", color = Color.White, style = MaterialTheme.typography.bodyLarge)
                         }
+                        Switch(
+                            checked = viewModel.isMusicEnabled, 
+                            onCheckedChange = { viewModel.isMusicEnabled = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = CyanNeon)
+                        )
+                    }
+                    
+                    Slider(
+                        value = viewModel.musicVolume,
+                        onValueChange = { viewModel.musicVolume = it },
+                        colors = SliderDefaults.colors(thumbColor = CyanNeon, activeTrackColor = CyanDark)
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MutedText.copy(alpha = 0.2f))
+
+                    // --- Case Information (AI Data) ---
+                    Text(
+                        text = "ACTIVE INVESTIGATION DATA",
+                        color = CyanNeon,
+                        style = MaterialTheme.typography.labelMedium,
+                        letterSpacing = 2.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (currentCase != null) {
+                        val case = currentCase!!
+                        CaseInfoItem(label = "CASE TITLE", value = case.title)
+                        CaseInfoItem(label = "PRIMARY LOCATION", value = case.clues.firstOrNull()?.locationName ?: "Unknown")
+                        CaseInfoItem(label = "SUSPECTS COUNT", value = "${case.suspects.size} Profiles")
+                        CaseInfoItem(label = "SUSPECT NAMES", value = case.suspects.joinToString(", ") { it.name })
+                        CaseInfoItem(label = "EVIDENCE COUNT", value = "${case.clues.size} Detected Items")
+                    } else {
+                        Text(
+                            text = "NO ACTIVE CASE DATA FOUND",
+                            color = Color.Red.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MutedText.copy(alpha = 0.12f))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MutedText.copy(alpha = 0.2f))
 
-                    Text("Difficulty", color = MutedText, style = MaterialTheme.typography.labelLarge)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val levels = listOf("Easy", "Normal", "Hard")
-                        levels.forEach { lvl ->
-                            val selected = lvl == difficulty
-                            Button(
-                                onClick = { difficulty = lvl },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (selected) neonYellow else ButtonDark,
-                                    contentColor = if (selected) Color.Black else Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text(lvl, style = MaterialTheme.typography.labelLarge)
-                            }
-                        }
-                    }
+                    Text("System Status", color = MutedText, style = MaterialTheme.typography.labelLarge)
+                    Text("GROQ CORE: ONLINE", color = CyanNeon, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                    Text("GEMINI CORE: ACTIVE", color = CyanNeon, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                    Text("MEMORY: SECURE", color = CyanNeon, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
                 }
             }
 
@@ -143,26 +176,41 @@ fun SettingsScreen(navController: NavController, modifier: Modifier = Modifier) 
                     Text("BACK", style = MaterialTheme.typography.labelLarge)
                 }
 
-                Column(horizontalAlignment = Alignment.End) {
-                    Button(
-                        onClick = {
-                            savedMessageVisible = true
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black)
-                    ) {
-                        Text("SAVE SETTINGS", style = MaterialTheme.typography.labelLarge)
-                    }
-
-                    if (savedMessageVisible) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Settings saved successfully",
-                            color = neonYellow,
-                            style = MaterialTheme.typography.displaySmall
-                        )
-                    }
+                Button(
+                    onClick = { savedMessageVisible = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black)
+                ) {
+                    Text("SAVE SETTINGS", style = MaterialTheme.typography.labelLarge)
                 }
             }
+            
+            if (savedMessageVisible) {
+                Text(
+                    text = "Settings applied to local storage",
+                    color = neonYellow,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
+    }
+}
+
+@Composable
+fun CaseInfoItem(label: String, value: String) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Text(
+            text = label,
+            color = MutedText,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = value,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+        )
     }
 }

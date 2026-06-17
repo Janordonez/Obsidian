@@ -7,17 +7,18 @@ data class GameCase(
     val title: String,
     val description: String,
     val suspects: List<AISuspect>,
-    val clues: List<AIClue>
+    val clues: List<AIClue>,
+    val guiltyId: String = "" // ID of the guilty suspect
 )
 
 @Serializable
 data class AISuspect(
     val id: String,
     val name: String,
-    val gender: String, // "MALE" or "FEMALE"
+    val gender: String,
     val personality: String,
     val background: String,
-    val relation: String, // E.g., "Esposa del asesinado"
+    val relation: String,
     val tension: Float,
     val status: String,
     val bpm: Int,
@@ -44,4 +45,13 @@ data class InterrogationMessage(
     val text: String,
     val isDetective: Boolean,
     val time: String
+)
+
+data class GameResult(
+    val isCorrect: Boolean,
+    val accusedSuspectName: String,
+    val actualGuiltyName: String,
+    val epilogue: String,
+    val correctClueAssignments: Int,
+    val totalClues: Int
 )

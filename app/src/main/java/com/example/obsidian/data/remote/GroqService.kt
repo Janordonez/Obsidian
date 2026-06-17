@@ -2,18 +2,32 @@ package com.example.obsidian.data.remote
 
 import android.util.Log
 import com.example.obsidian.data.model.GameCase
-import com.google.ai.client.generativeai.GenerativeModel
+import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
 
-
-class GeminiService(apiKey: String) {
+class GroqService(apiKey: String) {
+    private val cleanApiKey = "Bearer ${apiKey.replace(" ", "").trim()}"
     private val json = Json { ignoreUnknownKeys = true }
-    private val cleanApiKey = apiKey.replace(" ", "").replace("\n", "").trim()
+    
+    private val api: GroqApi by lazy {
+        val logging = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
+        val client = OkHttpClient.Builder()
+            .addInterceptor(logging)
+            .build()
 
-    private val generativeModel = GenerativeModel(
-        modelName = "gemini-2.5-flash-lite",
-        apiKey = cleanApiKey,
-    )
+        Retrofit.Builder()
+            .baseUrl("https://api.groq.com/openai/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(GroqApi::class.java)
+    }
 
     suspend fun generateCase(suspectCount: Int = 4, clueCount: Int = 3): GameCase? {
         val prompt = """
@@ -59,52 +73,40 @@ class GeminiService(apiKey: String) {
         """.trimIndent()
 
         return try {
-            val response = generativeModel.generateContent(prompt)
-            var cleanText = response.text ?: throw Exception("IA: Respuesta vacía.")
-            Log.d("GeminiService", "Respuesta recibida: ${cleanText.take(100)}...")
-
-            if (cleanText.contains("```json")) {
-                cleanText = cleanText.substringAfter("```json").substringBefore("```")
-            } else if (cleanText.contains("```")) {
-                cleanText = cleanText.substringAfter("```").substringBefore("```")
-            }
-
-            json.decodeFromString<GameCase>(cleanText.trim())
+            val request = GroqRequest(
+                messages = listOf(GroqMessage("user", prompt)),
+                response_format = GroqResponseFormat()
+            )
+            val response = api.getCompletion(cleanApiKey, request)
+            val content = response.choices.firstOrNull()?.message?.content ?: return null
+            json.decodeFromString<GameCase>(content.trim())
         } catch (e: Exception) {
-            Log.e("GeminiService", "Error en generateCase: ${e.message}")
-            throw e
+            Log.e("GroqService", "Error: ${e.message}")
+            null
         }
     }
+
     suspend fun getSuspectResponse(
         suspectName: String,
         personality: String,
         history: List<Pair<String, String>>,
-        userMessage: String,
-        strategy: String
+        userMessage: String
     ): String {
-        val chatModel = GenerativeModel(
-            modelName = "gemini-2.5-flash-lite",
-            apiKey = cleanApiKey,
-        )
-
         val historyPrompt = history.joinToString("\n") { "${it.first}: ${it.second}" }
-
-        val systemPrompt = """
-            Eres $suspectName, un sospechoso en un juego.
-            Tu personalidad es $personality.
-            Conversacion previa:
-            $historyPrompt
-            
-            Detective dice: "$userMessage"
-            
-            Responde como el personaje de forma breve en español.
-        """.trimIndent()
+        val systemPrompt = "Eres $suspectName, un sospechoso. Tu personalidad es $personality. Responde de forma breve en español. No uses asteriscos."
+        
+        val messages = mutableListOf<GroqMessage>()
+        messages.add(GroqMessage("system", systemPrompt))
+        history.forEach {
+            messages.add(GroqMessage(if (it.first == "Detective") "user" else "assistant", it.second))
+        }
+        messages.add(GroqMessage("user", userMessage))
 
         return try {
-            val response = chatModel.generateContent(systemPrompt)
-            response.text ?: "..."
+            val request = GroqRequest(messages = messages, response_format = null)
+            val response = api.getCompletion(cleanApiKey, request)
+            response.choices.firstOrNull()?.message?.content ?: "..."
         } catch (e: Exception) {
-            Log.e("GeminiService", "Error en getSuspectResponse: ${e.message}")
             "..."
         }
     }
@@ -112,54 +114,21 @@ class GeminiService(apiKey: String) {
     suspend fun getDeductionAnalysis(
         caseTitle: String,
         caseDescription: String,
-        assignments: Map<String, List<String>>,
-        correctCount: Int,
-        totalClues: Int
+        assignments: Map<String, List<String>>
     ): String {
         val prompt = """
             Eres el sistema operativo OBSIDIAN.
-            Analiza estas asignaciones del detective para el caso "$caseTitle".
-            $caseDescription
-            
-            Asignaciones del detective:
-            ${assignments.entries.joinToString("\n") { "${it.key}: ${it.value.joinToString(", ")}" }}
-            
-            El detective ha asignado correctamente $correctCount de $totalClues pistas.
-            
-            Si todas son correctas, felicita brevemente al detective y dile que puede proceder a la acusacion.
-            Si hay errores, da una pista sutil sin revelar la respuesta directa.
-            IMPORTANTE: Responde solo con texto plano. No uses asteriscos, guiones al inicio, ni formato markdown.
-            Responde en español. Maximo 3 oraciones.
+            Analiza estas asignaciones para el caso "$caseTitle".
+            Descripción: $caseDescription
+            Asignaciones: ${assignments.entries.joinToString { "${it.key}: ${it.value}" }}
+            Di si son correctas en texto plano, sin simbolos.
         """.trimIndent()
 
         return try {
-            val response = generativeModel.generateContent(prompt)
-            response.text ?: "Error en el análisis."
+            val request = GroqRequest(messages = listOf(GroqMessage("user", prompt)), response_format = null)
+            val response = api.getCompletion(cleanApiKey, request)
+            response.choices.firstOrNull()?.message?.content ?: "Error de analisis."
         } catch (e: Exception) {
-            Log.e("GeminiService", "Error en getDeductionAnalysis: ${e.message}")
-            "Error de conexion."
-        }
-    }
-
-    suspend fun getClueAnalysis(
-        clueTitle: String,
-        clueDescription: String,
-        suspectName: String
-    ): String {
-        val prompt = """
-            Eres el sistema operativo OBSIDIAN.
-            Analiza la pista "$clueTitle": "$clueDescription".
-            Esta pista ha sido asignada a $suspectName.
-            
-            Di si la asignación es correcta o da una pista en español.
-            IMPORTANTE: Responde solo con texto plano. No uses asteriscos, guiones al inicio, ni formato markdown.
-        """.trimIndent()
-
-        return try {
-            val response = generativeModel.generateContent(prompt)
-            response.text ?: "Error en el análisis de la pista."
-        } catch (e: Exception) {
-            Log.e("GeminiService", "Error en getClueAnalysis: ${e.message}")
             "Error de conexion."
         }
     }
@@ -191,10 +160,11 @@ class GeminiService(apiKey: String) {
         """.trimIndent()
 
         return try {
-            val response = generativeModel.generateContent(prompt)
-            response.text ?: "El caso ha sido archivado."
+            val request = GroqRequest(messages = listOf(GroqMessage("user", prompt)), response_format = null)
+            val response = api.getCompletion(cleanApiKey, request)
+            response.choices.firstOrNull()?.message?.content ?: "El caso ha sido archivado."
         } catch (e: Exception) {
-            Log.e("GeminiService", "Error en generateEpilogue: ${e.message}")
+            Log.e("GroqService", "Error en generateEpilogue: ${e.message}")
             "El caso ha sido archivado en los registros de OBSIDIAN."
         }
     }
