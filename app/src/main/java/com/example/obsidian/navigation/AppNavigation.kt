@@ -34,7 +34,7 @@ fun AppNavigation(
             )
         }
         composable(Screen.Clue.route) { 
-            ClueScreen(navController, Modifier.padding(innerPadding)) 
+            ClueScreen(navController, viewModel, Modifier.padding(innerPadding)) 
         }
         composable(Screen.Evidence.route) { 
             EvidenceScreen(navController, viewModel, Modifier.padding(innerPadding))
@@ -46,7 +46,14 @@ fun AppNavigation(
             MapScreen(navController, viewModel, Modifier.padding(innerPadding))
         }
         composable(Screen.Settings.route) { 
-            SettingsScreen(navController, Modifier.padding(innerPadding)) 
+            SettingsScreen(navController, viewModel, Modifier.padding(innerPadding)) 
+        }
+        composable(Screen.Accusation.route) {
+            AccusationScreen(navController, viewModel, Modifier.padding(innerPadding))
+        }
+        composable(Screen.Verdict.route) {
+            VerdictScreen(navController, viewModel, Modifier.padding(innerPadding))
         }
     }
 }
+

@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
             ObsidianTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF09090B) // zinc-950
+                    color = Color(0xFF09090B)
                 ) {
                     AppRoot()
                 }
@@ -56,8 +56,11 @@ private fun AppRoot() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Hide bottom bar on Case screen (MainMenu)
-    val showBottomBar = currentRoute != Screen.Case.route
+    // Hide bottom bar on Case (MainMenu), Accusation, and Verdict screens
+    val showBottomBar = currentRoute != null &&
+            currentRoute != Screen.Case.route &&
+            currentRoute != Screen.Accusation.route &&
+            currentRoute != Screen.Verdict.route
 
     Scaffold(
         bottomBar = {

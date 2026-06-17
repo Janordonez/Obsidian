@@ -1,27 +1,33 @@
 package com.example.obsidian.ui.viewmodel
 
+import android.app.Application
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import android.app.Application
-import android.content.Context
 import androidx.lifecycle.AndroidViewModel
-import com.example.obsidian.R
-import com.example.obsidian.data.model.*
-import com.example.obsidian.data.remote.GeminiService
+import androidx.lifecycle.viewModelScope
 import com.example.obsidian.BuildConfig
+import com.example.obsidian.R
+import com.example.obsidian.data.model.AISuspect
+import com.example.obsidian.data.model.GameCase
+import com.example.obsidian.data.model.GameResult
+import com.example.obsidian.data.model.InterrogationMessage
+import com.example.obsidian.data.remote.GeminiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
+import android.util.Log
+import com.example.obsidian.data.remote.GroqService
 
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val geminiService = GeminiService(BuildConfig.GEMINI_API_KEY)
+    private val groqService = GroqService(BuildConfig.GROQ_API_KEY)
     private val sharedPrefs = application.getSharedPreferences("obsidian_prefs", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
     
@@ -37,8 +43,45 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
-    private val maleImages = listOf(R.drawable.sus1, R.drawable.sus3, R.drawable.malesus1, R.drawable.malesus2, R.drawable.malesus3, R.drawable.malesus4)
-    private val femaleImages = listOf(R.drawable.susfemale1, R.drawable.susfemale2, R.drawable.femalesus1, R.drawable.femalesus2, R.drawable.femalesus3, R.drawable.femalesus4)
+    // Clue assignments state
+    private val _clueAssignments = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    val clueAssignments = _clueAssignments.asStateFlow()
+
+    // Game result state
+    private val _gameResult = MutableStateFlow<GameResult?>(null)
+    val gameResult = _gameResult.asStateFlow()
+
+    private val _deductionAnalysis = MutableStateFlow("")
+    val deductionAnalysis = _deductionAnalysis.asStateFlow()
+
+    var isAnalyzing by mutableStateOf(false)
+        private set
+
+    var isSubmittingAccusation by mutableStateOf(false)
+        private set
+
+    // Audio Settings
+    var musicVolume by mutableStateOf(0.7f)
+    var effectsVolume by mutableStateOf(0.8f)
+    var isMusicEnabled by mutableStateOf(true)
+    var isEffectsEnabled by mutableStateOf(true)
+
+    private val maleImages = listOf(
+        R.drawable.sus1,
+        R.drawable.sus3,
+        R.drawable.malesus1,
+        R.drawable.malesus2,
+        R.drawable.malesus3,
+        R.drawable.malesus4
+    )
+    private val femaleImages = listOf(
+        R.drawable.susfemale1,
+        R.drawable.susfemale2,
+        R.drawable.femalesus1,
+        R.drawable.femalesus2,
+        R.drawable.femalesus3,
+        R.drawable.femalesus4
+    )
 
     init {
         loadSavedCase()
@@ -50,8 +93,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val savedCase = json.decodeFromString<GameCase>(savedCaseJson)
                 _currentCase.value = savedCase
-                
-                // Load messages if any (could also be saved, but let's start with the case)
+
                 val initialMessages = savedCase.suspects.associate { it.id to listOf(
                     InterrogationMessage("SISTEMA", "INTERROGATORIO REANUDADO", false, getCurrentTime())
                 ) }
@@ -71,8 +113,26 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             isGenerating = true
             errorMessage = null
+            _gameResult.value = null
+            _clueAssignments.value = emptyMap()
+            _deductionAnalysis.value = ""
             try {
-                val newCase = geminiService.generateCase()
+                val suspectCount = (3..5).random()
+                val clueCount = (4..10).random()
+                
+                var newCase: GameCase? = null
+                try {
+                    Log.d("GameViewModel", "Intentando generar caso con Gemini ($suspectCount sospechosos, $clueCount pistas)...")
+                    newCase = geminiService.generateCase(suspectCount, clueCount)
+                } catch (e: Exception) {
+                    Log.e("GameViewModel", "Error al generar caso con Gemini: ${e.message}")
+                }
+
+                if (newCase == null) {
+                    Log.d("GameViewModel", "Gemini falló o retornó nulo, intentando backup con Groq...")
+                    newCase = groqService.generateCase(suspectCount, clueCount)
+                }
+
                 if (newCase != null) {
                     var maleIdx = 0
                     var femaleIdx = 0
@@ -95,10 +155,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     ) }
                     _messages.value = initialMessages
                 } else {
-                    errorMessage = "No se pudo generar el caso (Respuesta nula)."
+                    errorMessage = "No se pudo generar el caso con Gemini ni con Groq (backup)."
                 }
             } catch (e: Exception) {
-                errorMessage = "Error de IA: ${e.message}"
+                errorMessage = "Error de IA (ambos proveedores fallaron): ${e.message}"
             }
             isGenerating = false
         }
@@ -119,15 +179,36 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 ?.map { (if (it.isDetective) "Detective" else suspect.name) to it.text }
                 ?: emptyList()
 
-            val response = geminiService.getSuspectResponse(
-                suspect.name,
-                suspect.personality,
-                history,
-                text,
-                strategy
-            )
+            var response: String? = null
+            try {
+                Log.d("GameViewModel", "Intentando obtener respuesta de sospechoso con Gemini...")
+                response = geminiService.getSuspectResponse(
+                    suspect.name,
+                    suspect.personality,
+                    history,
+                    text,
+                    strategy
+                )
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error en Gemini: ${e.message}")
+            }
 
-            val aiMsg = InterrogationMessage(suspectId, response, false, getCurrentTime())
+            if (response == null || response == "...") {
+                Log.d("GameViewModel", "Intentando backup con Groq para respuesta del sospechoso...")
+                try {
+                    response = groqService.getSuspectResponse(
+                        suspect.name,
+                        suspect.personality,
+                        history,
+                        text
+                    )
+                } catch (e: Exception) {
+                    Log.e("GameViewModel", "Error en Groq (backup): ${e.message}")
+                }
+            }
+
+            val finalResponse = response ?: "..."
+            val aiMsg = InterrogationMessage(suspectId, finalResponse, false, getCurrentTime())
             updateMessages(suspectId, aiMsg)
         }
     }
@@ -144,23 +225,147 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
     }
 
-    private val _deductionAnalysis = MutableStateFlow("")
-    val deductionAnalysis = _deductionAnalysis.asStateFlow()
+    // ---- Clue Assignment Functions ----
 
-    var isAnalyzing by mutableStateOf(false)
-        private set
+    fun assignClueToSuspect(suspectName: String, clueTitle: String) {
+        val updatedMap = _clueAssignments.value.toMutableMap()
+        
+        // Remove clue from any other suspect first
+        _clueAssignments.value.forEach { (name, list) ->
+            updatedMap[name] = list.filterNot { it == clueTitle }
+        }
+
+        val currentClues = updatedMap[suspectName] ?: emptyList()
+        updatedMap[suspectName] = (currentClues + clueTitle).distinct()
+
+        _clueAssignments.value = updatedMap
+    }
+
+    fun getCorrectClueCount(): Int {
+        val gameCase = _currentCase.value ?: return 0
+        val assignments = _clueAssignments.value
+        
+        var correctCount = 0
+        gameCase.clues.forEach { clue ->
+            val ownerSuspect = gameCase.suspects.find { it.id == clue.ownerSuspectId }
+            val assignedToName = assignments.entries.find { entry ->
+                clue.title in entry.value
+            }?.key
+            if (ownerSuspect != null && assignedToName == ownerSuspect.name) {
+                correctCount++
+            }
+        }
+        return correctCount
+    }
+
+    fun allCluesAssigned(): Boolean {
+        val currentCase = _currentCase.value ?: return false
+        val allClues = currentCase.clues.map { it.title }
+        val assignedClues = _clueAssignments.value.values.flatten().toSet()
+        return allClues.all { it in assignedClues }
+    }
 
     fun analyzeDeductions(assignments: Map<String, List<String>>) {
         val currentCase = _currentCase.value ?: return
         viewModelScope.launch {
             isAnalyzing = true
-            val analysis = geminiService.getDeductionAnalysis(
-                currentCase.title,
-                currentCase.description,
-                assignments
-            )
-            _deductionAnalysis.value = analysis
+            val correctCount = getCorrectClueCount()
+            
+            var analysis: String? = null
+            try {
+                Log.d("GameViewModel", "Intentando analizar deducciones con Gemini...")
+                analysis = geminiService.getDeductionAnalysis(
+                    currentCase.title,
+                    currentCase.description,
+                    assignments,
+                    correctCount,
+                    currentCase.clues.size
+                )
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error al analizar deducciones con Gemini: ${e.message}")
+            }
+
+            if (analysis == null || analysis.startsWith("Error")) {
+                Log.d("GameViewModel", "Intentando backup con Groq para análisis de deducciones...")
+                try {
+                    analysis = groqService.getDeductionAnalysis(
+                        currentCase.title,
+                        currentCase.description,
+                        assignments
+                    )
+                } catch (e: Exception) {
+                    Log.e("GameViewModel", "Error en Groq (backup) al analizar deducciones: ${e.message}")
+                }
+            }
+
+            _deductionAnalysis.value = analysis ?: "Error al analizar las deducciones."
             isAnalyzing = false
         }
     }
+
+    fun submitAccusation(accusedSuspectId: String) {
+        val gameCase = _currentCase.value ?: return
+        viewModelScope.launch {
+            isSubmittingAccusation = true
+            errorMessage = null
+
+            val accusedSuspect = gameCase.suspects.find { it.id == accusedSuspectId }
+            val guiltySuspect = gameCase.suspects.find { it.id == gameCase.guiltyId }
+
+            val isCorrect = accusedSuspectId == gameCase.guiltyId
+            val correctClues = getCorrectClueCount()
+
+            var epilogue: String? = null
+            try {
+                Log.d("GameViewModel", "Intentando generar epílogo con Gemini...")
+                epilogue = geminiService.generateEpilogue(
+                    caseTitle = gameCase.title,
+                    caseDescription = gameCase.description,
+                    guiltyName = guiltySuspect?.name ?: "Desconocido",
+                    accusedName = accusedSuspect?.name ?: "Desconocido",
+                    wasCorrect = isCorrect
+                )
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error en epílogo con Gemini: ${e.message}")
+            }
+
+            if (epilogue == null || epilogue.startsWith("Error") || epilogue.contains("archivado")) {
+                Log.d("GameViewModel", "Intentando backup con Groq para generar epílogo...")
+                try {
+                    epilogue = groqService.generateEpilogue(
+                        caseTitle = gameCase.title,
+                        caseDescription = gameCase.description,
+                        guiltyName = guiltySuspect?.name ?: "Desconocido",
+                        accusedName = accusedSuspect?.name ?: "Desconocido",
+                        wasCorrect = isCorrect
+                    )
+                } catch (e: Exception) {
+                    Log.e("GameViewModel", "Error en Groq (backup) para epílogo: ${e.message}")
+                }
+            }
+
+            _gameResult.value = GameResult(
+                isCorrect = isCorrect,
+                accusedSuspectName = accusedSuspect?.name ?: "Desconocido",
+                actualGuiltyName = guiltySuspect?.name ?: "Desconocido",
+                epilogue = epilogue ?: "El caso ha sido archivado en los registros de OBSIDIAN.",
+                correctClueAssignments = correctClues,
+                totalClues = gameCase.clues.size
+            )
+
+            isSubmittingAccusation = false
+        }
+    }
+
+    fun resetGame() {
+        _currentCase.value = null
+        _messages.value = emptyMap()
+        _gameResult.value = null
+        _clueAssignments.value = emptyMap()
+        _deductionAnalysis.value = ""
+        errorMessage = null
+        sharedPrefs.edit().remove("current_case").apply()
+    }
 }
+
+
