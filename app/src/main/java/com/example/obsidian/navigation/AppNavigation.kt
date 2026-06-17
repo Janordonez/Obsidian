@@ -40,7 +40,7 @@ fun AppNavigation(
             EvidenceScreen(navController, viewModel, Modifier.padding(innerPadding))
         }
         composable(Screen.Interrogation.route) { 
-            InterrogationScreen(navController, viewModel, Modifier.padding(innerPadding)) 
+            InterrogationScreen(viewModel, Modifier.padding(innerPadding))
         }
         composable(Screen.Map.route) { 
             MapScreen(navController, viewModel, Modifier.padding(innerPadding))

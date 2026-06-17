@@ -12,12 +12,12 @@ import androidx.compose.material.icons.filled.Verified
 import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
-    object Case: Screen("case_screen", "Case", Icons.Default.Star)
-    object Clue: Screen("clue_screen", "Clue", Icons.Default.Search)
-    object Evidence: Screen("evidence_screen", "Evidence", Icons.Default.Email)
-    object Interrogation: Screen("interrogation_screen", "Interrogation", Icons.Default.Person)
-    object Map: Screen("map_screen", "Map", Icons.Default.LocationOn)
-    object Settings: Screen("settings_screen", "Settings", Icons.Default.Settings)
-    object Accusation: Screen("accusation_screen", "Accusation", Icons.Default.Gavel)
-    object Verdict: Screen("verdict_screen", "Verdict", Icons.Default.Verified)
-}
+    object Case: Screen("case_screen", "Inicio", Icons.Default.Star)
+    object Clue: Screen("clue_screen", "Pistas", Icons.Default.Search)
+    object Evidence: Screen("evidence_screen", "Evidencias", Icons.Default.Email)
+    object Interrogation: Screen("interrogation_screen", "Interrogatorio", Icons.Default.Person)
+    object Map: Screen("map_screen", "Mapa", Icons.Default.LocationOn)
+    object Settings: Screen("settings_screen", "Ajustes", Icons.Default.Settings)
+    object Accusation: Screen("accusation_screen", "Acusación", Icons.Default.Gavel)
+    object Verdict: Screen("verdict_screen", "Veredicto", Icons.Default.Verified)
+}

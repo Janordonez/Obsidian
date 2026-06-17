@@ -33,7 +33,7 @@ import com.example.obsidian.ui.viewmodel.GameViewModel
 fun EvidenceScreen(
     navController: NavController, 
     viewModel: GameViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val gameCase by viewModel.currentCase.collectAsStateWithLifecycle()
     val deductionAnalysis by viewModel.deductionAnalysis.collectAsStateWithLifecycle()
@@ -73,13 +73,13 @@ fun EvidenceScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "EVIDENCE BOARD",
+            text = "TABLERO DE EVIDENCIAS",
             color = neonYellow,
             style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold)
         )
 
         Text(
-            text = "Connect clues. Expose contradictions.",
+            text = "Conecta pistas. Expón contradicciones.",
             color = CyanNeon,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium)
         )
@@ -102,14 +102,14 @@ fun EvidenceScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "AVAILABLE CLUES",
+                        text = "PISTAS DISPONIBLES",
                         color = CyanNeon,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                 }
 
                 Text(
-                    text = "Select one clue, then tap a suspect card to assign it.",
+                    text = "Selecciona una pista primero, luego toca una tarjeta de sospechoso para asignarla.",
                     color = Color.White,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -152,7 +152,7 @@ fun EvidenceScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "SUSPECT FILES",
+                    text = "EXPEDIENTES DE SOSPECHOSOS",
                     color = neonYellow,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
@@ -190,9 +190,9 @@ fun EvidenceScreen(
 
                             Text(
                                 text = if (assignedClues.isEmpty()) {
-                                    "Assigned clues: none"
+                                    "Pistas asignadas: ninguna"
                                 } else {
-                                    "Assigned clues: ${assignedClues.joinToString(", ")}"
+                                    "Pistas asignadas: ${assignedClues.joinToString(", ")}"
                                 },
                                 color = if (assignedClues.isEmpty()) Color(0xFF8B96A8) else CyanNeon,
                                 style = MaterialTheme.typography.bodyMedium
@@ -200,9 +200,9 @@ fun EvidenceScreen(
 
                             Text(
                                 text = if (selectedClue == null) {
-                                    "Tap a clue first, then tap this suspect to assign it."
+                                    "Toca una pista primero, luego toca este sospechoso para asignarla."
                                 } else {
-                                    "Tap to assign: ${selectedClue ?: ""}"
+                                    "Toca para asignar: ${selectedClue ?: ""}"
                                 },
                                 color = neonYellow.copy(alpha = 0.8f),
                                 style = MaterialTheme.typography.bodySmall
@@ -231,7 +231,7 @@ fun EvidenceScreen(
             } else {
                 Icon(imageVector = Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "ANALYZE DEDUCTION", fontWeight = FontWeight.Bold)
+                Text(text = "ANALIZAR DEDUCCIONES", fontWeight = FontWeight.Bold)
             }
         }
 

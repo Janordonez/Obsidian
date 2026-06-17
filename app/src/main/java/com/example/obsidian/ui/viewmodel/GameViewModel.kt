@@ -3,8 +3,10 @@ package com.example.obsidian.ui.viewmodel
 import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.obsidian.BuildConfig
@@ -37,10 +39,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _messages = MutableStateFlow<Map<String, List<InterrogationMessage>>>(emptyMap())
     val messages = _messages.asStateFlow()
 
-    var isGenerating by mutableStateOf(false)
+    var isGenerating by mutableStateOf(value = false)
         private set
 
-    var errorMessage by mutableStateOf<String?>(null)
+    var errorMessage by mutableStateOf<String?>(value = null)
         private set
 
     // Clue assignments state
@@ -54,17 +56,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _deductionAnalysis = MutableStateFlow("")
     val deductionAnalysis = _deductionAnalysis.asStateFlow()
 
-    var isAnalyzing by mutableStateOf(false)
+    var isAnalyzing by mutableStateOf(value = false)
         private set
 
-    var isSubmittingAccusation by mutableStateOf(false)
+    var isSubmittingAccusation by mutableStateOf(value = false)
         private set
 
     // Audio Settings
-    var musicVolume by mutableStateOf(0.7f)
-    var effectsVolume by mutableStateOf(0.8f)
-    var isMusicEnabled by mutableStateOf(true)
-    var isEffectsEnabled by mutableStateOf(true)
+    var musicVolume by mutableFloatStateOf(0.7f)
+    var effectsVolume by mutableFloatStateOf(0.8f)
+    var isMusicEnabled by mutableStateOf(value = true)
+    var isEffectsEnabled by mutableStateOf(value = true)
 
     private val maleImages = listOf(
         R.drawable.sus1,
@@ -72,7 +74,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         R.drawable.malesus1,
         R.drawable.malesus2,
         R.drawable.malesus3,
-        R.drawable.malesus4
+        R.drawable.malesus4,
     )
     private val femaleImages = listOf(
         R.drawable.susfemale1,
@@ -80,7 +82,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         R.drawable.femalesus1,
         R.drawable.femalesus2,
         R.drawable.femalesus3,
-        R.drawable.femalesus4
+        R.drawable.femalesus4,
     )
 
     init {
@@ -94,9 +96,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 val savedCase = json.decodeFromString<GameCase>(savedCaseJson)
                 _currentCase.value = savedCase
 
-                val initialMessages = savedCase.suspects.associate { it.id to listOf(
-                    InterrogationMessage("SISTEMA", "INTERROGATORIO REANUDADO", false, getCurrentTime())
-                ) }
+                val initialMessages = savedCase.suspects.associateBy(
+                    keySelector = { it.id }
+                ) {
+                    listOf(
+                        InterrogationMessage("SISTEMA", "INTERROGATORIO REANUDADO", isDetective = false, getCurrentTime())
+                    )
+                }
                 _messages.value = initialMessages
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -106,7 +112,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun saveCase(gameCase: GameCase) {
         val caseJson = json.encodeToString(gameCase)
-        sharedPrefs.edit().putString("current_case", caseJson).apply()
+        sharedPrefs.edit { putString("current_case", caseJson) }
     }
 
     fun startNewInvestigation() {
@@ -150,9 +156,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     saveCase(finalCase)
                     
                     // Initialize messages
-                    val initialMessages = mappedSuspects.associate { it.id to listOf(
-                        InterrogationMessage("SISTEMA", "INTERROGATORIO INICIADO", false, getCurrentTime())
-                    ) }
+                    val initialMessages = mappedSuspects.associateBy(
+                        keySelector = { it.id },
+                        valueTransform = {
+                            listOf(
+                                InterrogationMessage("SISTEMA", "INTERROGATORIO INICIADO", false, getCurrentTime())
+                            )
+                        }
+                    )
                     _messages.value = initialMessages
                 } else {
                     errorMessage = "No se pudo generar el caso con Gemini ni con Groq (backup)."
@@ -193,7 +204,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e("GameViewModel", "Error en Gemini: ${e.message}")
             }
 
-            if (response == null || response == "...") {
+            if ((response == null) || (response == "...")) {
                 Log.d("GameViewModel", "Intentando backup con Groq para respuesta del sospechoso...")
                 try {
                     response = groqService.getSuspectResponse(
@@ -251,7 +262,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val assignedToName = assignments.entries.find { entry ->
                 clue.title in entry.value
             }?.key
-            if (ownerSuspect != null && assignedToName == ownerSuspect.name) {
+            if ((ownerSuspect != null) && (assignedToName == ownerSuspect.name)) {
                 correctCount++
             }
         }
@@ -261,7 +272,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun allCluesAssigned(): Boolean {
         val currentCase = _currentCase.value ?: return false
         val allClues = currentCase.clues.map { it.title }
-        val assignedClues = _clueAssignments.value.values.flatten().toSet()
+        val assignedClues = _clueAssignments.value.values.asSequence().flatten().toSet()
         return allClues.all { it in assignedClues }
     }
 
@@ -364,7 +375,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _clueAssignments.value = emptyMap()
         _deductionAnalysis.value = ""
         errorMessage = null
-        sharedPrefs.edit().remove("current_case").apply()
+        sharedPrefs.edit { remove("current_case") }
     }
 }
 

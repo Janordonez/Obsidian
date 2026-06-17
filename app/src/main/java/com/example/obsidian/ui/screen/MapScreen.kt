@@ -174,7 +174,7 @@ fun MapScreen(
             Icon(Icons.Default.Fingerprint, contentDescription = null, tint = CyanNeon, modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(12.dp))
             Text(
-                text = "OBSIDIAN CASE FILE",
+                text = "EXPEDIENTE OBSIDIAN",
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,

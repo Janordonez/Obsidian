@@ -46,7 +46,7 @@ fun ClueScreen(
             Icon(Icons.Default.Search, contentDescription = null, tint = neonYellow, modifier = Modifier.size(28.dp))
             Spacer(modifier = Modifier.width(12.dp))
             Text(
-                text = "EVIDENCE JOURNAL",
+                text = "DIARIO DE EVIDENCIAS",
                 color = neonYellow,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Black

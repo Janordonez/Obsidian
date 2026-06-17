@@ -80,7 +80,7 @@ class GeminiService(apiKey: String) {
         personality: String,
         history: List<Pair<String, String>>,
         userMessage: String,
-        strategy: String
+        strategy: String,
     ): String {
         val chatModel = GenerativeModel(
             modelName = "gemini-2.5-flash-lite",
@@ -92,6 +92,8 @@ class GeminiService(apiKey: String) {
         val systemPrompt = """
             Eres $suspectName, un sospechoso en un juego.
             Tu personalidad es $personality.
+            Tu estrategia de respuesta actual es: $strategy.
+            
             Conversacion previa:
             $historyPrompt
             
@@ -137,29 +139,6 @@ class GeminiService(apiKey: String) {
             response.text ?: "Error en el análisis."
         } catch (e: Exception) {
             Log.e("GeminiService", "Error en getDeductionAnalysis: ${e.message}")
-            "Error de conexion."
-        }
-    }
-
-    suspend fun getClueAnalysis(
-        clueTitle: String,
-        clueDescription: String,
-        suspectName: String
-    ): String {
-        val prompt = """
-            Eres el sistema operativo OBSIDIAN.
-            Analiza la pista "$clueTitle": "$clueDescription".
-            Esta pista ha sido asignada a $suspectName.
-            
-            Di si la asignación es correcta o da una pista en español.
-            IMPORTANTE: Responde solo con texto plano. No uses asteriscos, guiones al inicio, ni formato markdown.
-        """.trimIndent()
-
-        return try {
-            val response = generativeModel.generateContent(prompt)
-            response.text ?: "Error en el análisis de la pista."
-        } catch (e: Exception) {
-            Log.e("GeminiService", "Error en getClueAnalysis: ${e.message}")
             "Error de conexion."
         }
     }

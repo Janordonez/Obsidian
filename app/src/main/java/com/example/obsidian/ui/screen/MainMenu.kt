@@ -69,7 +69,7 @@ fun MainMenu(
             ) {
                 Column {
                     Text(
-                        text = "SYS.STATUS: ONLINE",
+                        text = "ESTADO DEL SISTEMA: ACTIVO",
                         style = TextStyle(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 12.sp,
@@ -136,7 +136,7 @@ fun MainMenu(
             ) {
                 // Title
                 Text(
-                    text = "OBSIDIAN CASE FILE",
+                    text = "EXPEDIENTE OBSIDIAN",
                     style = TextStyle(
                         color = neonYellow,
                         fontSize = 36.sp,
@@ -172,7 +172,7 @@ fun MainMenu(
                         border = BorderStroke(1.dp, neonYellow.copy(alpha = 0.4f))
                     ) {
                         Text(
-                            text = if (isGenerating) "GENERATING CASE..." else "NEW INVESTIGATION",
+                            text = if (isGenerating) "GENERANDO CASO..." else "NUEVA INVESTIGACIÓN",
                             style = TextStyle(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
@@ -196,7 +196,7 @@ fun MainMenu(
                         border = BorderStroke(1.dp, neonYellow.copy(alpha = 0.28f))
                     ) {
                         Text(
-                            text = "CONTINUE CASE",
+                            text = "CONTINUAR CASO",
                             style = TextStyle(
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 16.sp
@@ -219,7 +219,7 @@ fun MainMenu(
                         border = BorderStroke(1.dp, neonYellow.copy(alpha = 0.2f))
                     ) {
                         Text(
-                            text = "SYSTEM SETTINGS",
+                            text = "AJUSTES DEL SISTEMA",
                             style = TextStyle(
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 14.sp
@@ -242,7 +242,7 @@ fun MainMenu(
                     color = Color.Transparent
                 ) {
                     Text(
-                        text = "V1.0 // RESTRICTED ACCESS // SECURED.LN",
+                        text = "V1.0 // ACCESO RESTRINGIDO // SEGURO.LN",
                         style = TextStyle(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 12.sp,

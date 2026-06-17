@@ -7,8 +7,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,9 +27,9 @@ import com.example.obsidian.ui.viewmodel.GameViewModel
 fun SettingsScreen(
     navController: NavController, 
     viewModel: GameViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    var savedMessageVisible by remember { mutableStateOf(false) }
+    var savedMessageVisible by remember { mutableStateOf(value = false) }
     val currentCase by viewModel.currentCase.collectAsState()
     val scrollState = rememberScrollState()
 
@@ -37,11 +37,11 @@ fun SettingsScreen(
         modifier = modifier
             .fillMaxSize()
             .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(DarkNavy, DeepBlack)))
-            .padding(20.dp)
+            .padding(20.dp),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Text(
-                text = "SYSTEM SETTINGS",
+                text = "AJUSTES DEL SISTEMA",
                 style = MaterialTheme.typography.headlineLarge.copy(color = neonYellow),
                 modifier = Modifier
                     .padding(vertical = 8.dp)
@@ -80,9 +80,9 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.VolumeUp, contentDescription = null, tint = MutedText, modifier = Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = MutedText, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Sound Effects", color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                            Text("Efectos de Sonido", color = Color.White, style = MaterialTheme.typography.bodyLarge)
                         }
                         Switch(
                             checked = viewModel.isEffectsEnabled, 
@@ -107,7 +107,7 @@ fun SettingsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.MusicNote, contentDescription = null, tint = MutedText, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Atmospheric Music", color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                            Text("Música", color = Color.White, style = MaterialTheme.typography.bodyLarge)
                         }
                         Switch(
                             checked = viewModel.isMusicEnabled, 
@@ -126,7 +126,7 @@ fun SettingsScreen(
 
                     // --- Case Information (AI Data) ---
                     Text(
-                        text = "ACTIVE INVESTIGATION DATA",
+                        text = "DATOS DE INVESTIGACIÓN ACTIVA",
                         color = CyanNeon,
                         style = MaterialTheme.typography.labelMedium,
                         letterSpacing = 2.sp,
@@ -136,14 +136,14 @@ fun SettingsScreen(
 
                     if (currentCase != null) {
                         val case = currentCase!!
-                        CaseInfoItem(label = "CASE TITLE", value = case.title)
-                        CaseInfoItem(label = "PRIMARY LOCATION", value = case.clues.firstOrNull()?.locationName ?: "Unknown")
-                        CaseInfoItem(label = "SUSPECTS COUNT", value = "${case.suspects.size} Profiles")
-                        CaseInfoItem(label = "SUSPECT NAMES", value = case.suspects.joinToString(", ") { it.name })
-                        CaseInfoItem(label = "EVIDENCE COUNT", value = "${case.clues.size} Detected Items")
+                        CaseInfoItem(label = "TÍTULO DEL CASO", value = case.title)
+                        CaseInfoItem(label = "UBICACIÓN PRINCIPAL", value = case.clues.firstOrNull()?.locationName ?: "Desconocida")
+                        CaseInfoItem(label = "CANTIDAD DE SOSPECHOSOS", value = "${case.suspects.size} Perfiles")
+                        CaseInfoItem(label = "NOMBRES DE LOS SOSPECHOSOS", value = case.suspects.joinToString(", ") { it.name })
+                        CaseInfoItem(label = "CANTIDAD DE EVIDENCIAS", value = "${case.clues.size} Artículos detectados")
                     } else {
                         Text(
-                            text = "NO ACTIVE CASE DATA FOUND",
+                            text = "NO SE ENCONTRARON DATOS DEL CASO",
                             color = Color.Red.copy(alpha = 0.7f),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.fillMaxWidth(),
@@ -153,10 +153,10 @@ fun SettingsScreen(
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MutedText.copy(alpha = 0.2f))
 
-                    Text("System Status", color = MutedText, style = MaterialTheme.typography.labelLarge)
-                    Text("GROQ CORE: ONLINE", color = CyanNeon, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                    Text("GEMINI CORE: ACTIVE", color = CyanNeon, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                    Text("MEMORY: SECURE", color = CyanNeon, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                    Text("Estado del Sistema", color = MutedText, style = MaterialTheme.typography.labelLarge)
+                    Text("NÚCLEO GROQ: EN LÍNEA", color = CyanNeon, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                    Text("NÚCLEO GEMINI: ACTIVO", color = CyanNeon, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                    Text("MEMORIA: PROTEGIDA", color = CyanNeon, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
                 }
             }
 
@@ -173,20 +173,20 @@ fun SettingsScreen(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = neonYellow),
                     border = BorderStroke(1.dp, neonYellow)
                 ) {
-                    Text("BACK", style = MaterialTheme.typography.labelLarge)
+                    Text("VOLVER", style = MaterialTheme.typography.labelLarge)
                 }
 
                 Button(
                     onClick = { savedMessageVisible = true },
                     colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black)
                 ) {
-                    Text("SAVE SETTINGS", style = MaterialTheme.typography.labelLarge)
+                    Text("GUARDAR AJUSTES", style = MaterialTheme.typography.labelLarge)
                 }
             }
             
             if (savedMessageVisible) {
                 Text(
-                    text = "Settings applied to local storage",
+                    text = "Ajustes aplicados al almacenamiento local",
                     color = neonYellow,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center,

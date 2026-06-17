@@ -54,7 +54,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavHostController
 import com.example.obsidian.R
 import com.example.obsidian.data.model.AISuspect
 import com.example.obsidian.data.model.InterrogationMessage
@@ -64,9 +63,8 @@ import com.example.obsidian.ui.viewmodel.GameViewModel
 
 @Composable
 fun InterrogationScreen(
-    navController: NavHostController, 
     viewModel: GameViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val gameCase by viewModel.currentCase.collectAsStateWithLifecycle()
     val allMessages by viewModel.messages.collectAsStateWithLifecycle()
@@ -95,7 +93,7 @@ fun InterrogationScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 Button(
                     onClick = { viewModel.startNewInvestigation() },
-                    colors = ButtonDefaults.buttonColors(containerColor = CyanNeon, contentColor = Color.Black)
+                    colors = ButtonDefaults.buttonColors(containerColor = CyanNeon, contentColor = Color.Black),
                 ) {
                     Text("REINTENTAR")
                 }
@@ -126,8 +124,7 @@ fun InterrogationScreen(
         SuspectSelector(
             suspects = suspects,
             selectedSuspect = selectedSuspect,
-            onSuspectSelected = { selectedSuspect = it }
-        )
+        ) { selectedSuspect = it }
 
         Column(
             modifier = Modifier
@@ -142,7 +139,7 @@ fun InterrogationScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = gameCase?.title ?: "OBSIDIAN CASE FILE",
+                    text = gameCase?.title ?: "EXPEDIENTE OBSIDIAN",
                     color = CyanNeon,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Bold,
@@ -355,13 +352,13 @@ fun SuspectPortraitCard(suspect: AISuspect) {
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             LinearProgressIndicator(
-                                progress = suspect.tension,
+                                progress = { suspect.tension },
                                 modifier = Modifier
                                     .width(80.dp)
                                     .height(4.dp)
                                     .clip(RoundedCornerShape(2.dp)),
                                 color = if (suspect.tension > 0.8f) AggressiveRed else CyanNeon,
-                                trackColor = Color.Black.copy(alpha = 0.5f)
+                                trackColor = Color.Black.copy(alpha = 0.5f),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(

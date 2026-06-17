@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
         
         // Esconder las barras del sistema para modo inmersivo
         val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController?.let {
+        windowInsetsController.let {
             it.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             it.hide(WindowInsetsCompat.Type.systemBars())
         }
@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
             ObsidianTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF09090B)
+                    color = Color(0xFF09090B),
                 ) {
                     AppRoot()
                 }
@@ -57,10 +57,10 @@ private fun AppRoot() {
     val currentRoute = navBackStackEntry?.destination?.route
 
     // Hide bottom bar on Case (MainMenu), Accusation, and Verdict screens
-    val showBottomBar = currentRoute != null &&
-            currentRoute != Screen.Case.route &&
-            currentRoute != Screen.Accusation.route &&
-            currentRoute != Screen.Verdict.route
+    val showBottomBar = (currentRoute != null) &&
+            (currentRoute != Screen.Case.route) &&
+            (currentRoute != Screen.Accusation.route) &&
+            (currentRoute != Screen.Verdict.route)
 
     Scaffold(
         bottomBar = {

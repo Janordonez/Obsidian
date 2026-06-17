@@ -75,7 +75,7 @@ class GroqService(apiKey: String) {
         return try {
             val request = GroqRequest(
                 messages = listOf(GroqMessage("user", prompt)),
-                response_format = GroqResponseFormat()
+                response_format = GroqResponseFormat(),
             )
             val response = api.getCompletion(cleanApiKey, request)
             val content = response.choices.firstOrNull()?.message?.content ?: return null
@@ -93,7 +93,14 @@ class GroqService(apiKey: String) {
         userMessage: String
     ): String {
         val historyPrompt = history.joinToString("\n") { "${it.first}: ${it.second}" }
-        val systemPrompt = "Eres $suspectName, un sospechoso. Tu personalidad es $personality. Responde de forma breve en español. No uses asteriscos."
+        val systemPrompt = """
+            Eres $suspectName, un sospechoso. 
+            Tu personalidad es $personality. 
+            Historial de chat:
+            $historyPrompt
+            
+            Responde de forma breve en español. No uses asteriscos.
+        """.trimIndent()
         
         val messages = mutableListOf<GroqMessage>()
         messages.add(GroqMessage("system", systemPrompt))
@@ -106,7 +113,7 @@ class GroqService(apiKey: String) {
             val request = GroqRequest(messages = messages, response_format = null)
             val response = api.getCompletion(cleanApiKey, request)
             response.choices.firstOrNull()?.message?.content ?: "..."
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             "..."
         }
     }
@@ -129,7 +136,7 @@ class GroqService(apiKey: String) {
             val response = api.getCompletion(cleanApiKey, request)
             response.choices.firstOrNull()?.message?.content ?: "Error de analisis."
         } catch (e: Exception) {
-            "Error de conexion."
+            "$e"
         }
     }
 
