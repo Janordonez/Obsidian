@@ -15,12 +15,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.obsidian.navigation.AppNavigation
 import com.example.obsidian.navigation.Screen
 import com.example.obsidian.ui.components.CyberBottomBar
 import com.example.obsidian.ui.theme.ObsidianTheme
+import com.example.obsidian.ui.viewmodel.GameViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,14 +31,16 @@ class MainActivity : ComponentActivity() {
         
         // Esconder las barras del sistema para modo inmersivo
         val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+        windowInsetsController?.let {
+            it.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            it.hide(WindowInsetsCompat.Type.systemBars())
+        }
 
         setContent {
             ObsidianTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF09090B) // zinc-950
+                    color = Color(0xFF09090B)
                 ) {
                     AppRoot()
                 }
@@ -48,11 +52,15 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppRoot() {
     val navController = rememberNavController()
+    val gameViewModel: GameViewModel = viewModel()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Hide bottom bar on Case screen (MainMenu)
-    val showBottomBar = currentRoute != Screen.Case.route
+    // Hide bottom bar on Case (MainMenu), Accusation, and Verdict screens
+    val showBottomBar = currentRoute != null &&
+            currentRoute != Screen.Case.route &&
+            currentRoute != Screen.Accusation.route &&
+            currentRoute != Screen.Verdict.route
 
     Scaffold(
         bottomBar = {
@@ -61,6 +69,10 @@ private fun AppRoot() {
             }
         }
     ) { innerPadding ->
-        AppNavigation(modifier = Modifier.padding(innerPadding), navController = navController)
+        AppNavigation(
+            modifier = Modifier.padding(innerPadding), 
+            navController = navController,
+            viewModel = gameViewModel
+        )
     }
 }

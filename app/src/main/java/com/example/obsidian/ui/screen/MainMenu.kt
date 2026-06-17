@@ -1,5 +1,6 @@
 package com.example.obsidian.ui.screen
 
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,8 +41,10 @@ import com.example.obsidian.ui.theme.MutedText
 import com.example.obsidian.ui.theme.neonYellow
 import com.example.obsidian.ui.theme.recRed
 
+
 @Composable
 fun MainMenu(
+    isGenerating: Boolean = false,
     onNewInvestigation: () -> Unit,
     onContinueCase: () -> Unit,
     onSettings: () -> Unit
@@ -163,12 +166,13 @@ fun MainMenu(
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF0B0F14),
-                            contentColor = neonYellow
+                            contentColor = if (isGenerating) Color.Gray else neonYellow
                         ),
+                        enabled = !isGenerating,
                         border = BorderStroke(1.dp, neonYellow.copy(alpha = 0.4f))
                     ) {
                         Text(
-                            text = "NEW INVESTIGATION",
+                            text = if (isGenerating) "GENERATING CASE..." else "NEW INVESTIGATION",
                             style = TextStyle(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
