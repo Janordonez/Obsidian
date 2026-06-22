@@ -95,6 +95,12 @@ fun EvidenceBoardScreen() {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
+            text = "EVIDENCE SCREEN LOADED",
+            color = Color.Red,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        )
+
+        Text(
             text = "EVIDENCE BOARD",
             color = neonYellow,
             style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold)

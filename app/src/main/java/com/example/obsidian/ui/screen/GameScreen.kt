@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,13 +23,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.obsidian.navigation.Screen
-import com.example.obsidian.ui.components.CyberBottomBar
 
 @Composable
 fun GameScreen() {
-    var selectedScreen: Screen by remember { mutableStateOf(Screen.Case) }
+    var selectedScreen by remember { mutableStateOf(Screen.Case) }
 
     Box(
         modifier = Modifier
@@ -44,15 +45,19 @@ fun GameScreen() {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
                 when (selectedScreen) {
-                    Screen.Case -> CaseScreen(onTabSelected = { selectedScreen = it })
-                    Screen.Clue -> CluePlaceholderScreen()
+                    Screen.Case -> CaseScreen(
+                        onTabSelected = { screen ->
+                            selectedScreen = screen
+                        }
+                    )
+                    Screen.Clue -> ClueScreen()
                     Screen.Evidence -> EvidenceBoardScreen()
-                    Screen.Interrogation -> InterrogationPlaceholderScreen()
-                    Screen.Map -> MapPlaceholderScreen()
+                    Screen.Interrogation -> InterrogationScreen()
+                    Screen.Map -> MapScreen()
                 }
             }
 
-            CyberBottomBar(
+            GameBottomBar(
                 selectedScreen = selectedScreen,
                 onScreenSelected = { selectedScreen = it }
             )
@@ -61,22 +66,55 @@ fun GameScreen() {
 }
 
 @Composable
-private fun CluePlaceholderScreen() {
+private fun GameBottomBar(
+    selectedScreen: Screen,
+    onScreenSelected: (Screen) -> Unit
+) {
+    NavigationBar(containerColor = Color(0xFF09090B).copy(alpha = 0.95f)) {
+        listOf(Screen.Case, Screen.Clue, Screen.Evidence, Screen.Interrogation, Screen.Map).forEach { screen ->
+            NavigationBarItem(
+                selected = selectedScreen == screen,
+                onClick = { onScreenSelected(screen) },
+                icon = {
+                    Text(
+                        text = when (screen) {
+                            Screen.Case -> "Case"
+                            Screen.Clue -> "Clue"
+                            Screen.Evidence -> "Evidence"
+                            Screen.Interrogation -> "Talk"
+                            Screen.Map -> "Map"
+                        },
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                label = {
+                    Text(
+                        text = when (screen) {
+                            Screen.Case -> "Case"
+                            Screen.Clue -> "Clue"
+                            Screen.Evidence -> "Evidence"
+                            Screen.Interrogation -> "Talk"
+                            Screen.Map -> "Map"
+                        }
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ClueScreen() {
     PlaceholderScreen("CLUE ARCHIVE", "Forensic archive coming online.")
 }
 
 @Composable
-private fun EvidencePlaceholderScreen() {
-    PlaceholderScreen("EVIDENCE BOARD", "Physical and digital evidence will appear here.")
-}
-
-@Composable
-private fun InterrogationPlaceholderScreen() {
+private fun InterrogationScreen() {
     PlaceholderScreen("INTERROGATION", "Suspect dialogue interface coming soon.")
 }
 
 @Composable
-private fun MapPlaceholderScreen() {
+private fun MapScreen() {
     PlaceholderScreen("INVESTIGATION MAP", "Location tracking and site analysis will appear here.")
 }
 
