@@ -32,8 +32,9 @@ fun ClueScreen(
     viewModel: GameViewModel,
     modifier: Modifier = Modifier
 ) {
-    val gameCase by viewModel.currentCase.collectAsStateWithLifecycle()
-    val clues = gameCase?.clues ?: emptyList()
+    val gameState by viewModel.gameState.collectAsStateWithLifecycle()
+    // Solo mostramos pistas que han sido encontradas (isFound)
+    val discoveredClues = gameState.currentCase?.clues?.filter { it.isFound } ?: emptyList()
 
     Column(
         modifier = modifier
@@ -53,40 +54,29 @@ fun ClueScreen(
             )
         }
 
-        if (clues.isEmpty()) {
+        if (discoveredClues.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("No hay pistas registradas en el sistema.", color = Color.Gray)
+                Text("No hay pistas registradas. Explora la escena o interroga a sospechosos.", color = Color.Gray, fontSize = 12.sp)
             }
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(clues) { clue ->
+                items(discoveredClues) { clue ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = SurfaceDark),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth().border(1.dp, CyanNeon.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Description, contentDescription = null, tint = CyanNeon, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = clue.title.uppercase(),
-                                    color = CyanNeon,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "LOCALIZACIÓN: ${clue.locationName}",
-                                color = Color.Gray,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                text = clue.title.uppercase(),
+                                color = CyanNeon,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = clue.description,
                                 color = Color.White,
@@ -100,10 +90,11 @@ fun ClueScreen(
         
         Button(
             onClick = { navController.popBackStack() },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black)
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black),
+            shape = RoundedCornerShape(8.dp)
         ) {
-            Text("VOLVER AL MENÚ", fontWeight = FontWeight.Bold)
+            Text("VOLVER", fontWeight = FontWeight.Bold)
         }
     }
 }

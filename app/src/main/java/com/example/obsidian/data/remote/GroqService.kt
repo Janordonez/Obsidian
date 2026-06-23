@@ -1,7 +1,11 @@
 package com.example.obsidian.data.remote
 
 import android.util.Log
-import com.example.obsidian.data.model.GameCase
+import com.example.obsidian.data.model.Case
+import com.example.obsidian.data.model.Suspect
+import com.example.obsidian.data.model.Clue
+import com.example.obsidian.data.model.Solution
+import com.example.obsidian.data.model.Question
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -29,47 +33,75 @@ class GroqService(apiKey: String) {
             .create(GroqApi::class.java)
     }
 
-    suspend fun generateCase(suspectCount: Int = 4, clueCount: Int = 3): GameCase? {
+    suspend fun generateCase(suspectCount: Int = 3): Case? {
         val prompt = """
-            Genera un caso de misterio para un juego de detectives.
+            Genera un caso de misterio complejo para un juego de detectives.
             Devuelve un JSON estrictamente con esta estructura:
             {
-              "title": "Titulo",
-              "description": "Descripcion breve del crimen",
-              "guiltyId": "ID del sospechoso culpable (ej: S1)",
+              "id": "CASE-" + numero aleatorio,
+              "title": "Titulo del caso",
+              "description": "Descripcion detallada del crimen",
               "suspects": [
                 {
                   "id": "S1",
                   "name": "Nombre Completo",
-                  "gender": "MALE o FEMALE",
-                  "personality": "Hostil/Evasivo/etc",
-                  "background": "Historia breve",
-                  "relation": "Relación con el caso (ej: Esposa de la víctima)",
-                  "alibi": "Donde estaba",
-                  "tension": 0.5,
-                  "status": "NORMAL",
-                  "bpm": 80,
-                  "caseNumber": "#001",
-                  "room": "SALA A"
+                  "gender": "MALE/FEMALE",
+                  "personality": "Rasgos de personalidad",
+                  "alibi": "Coartada inicial",
+                  "contradictions": ["Dato especifico que contradice su coartada"],
+                  "trustLevel": 50,
+                  "relation": "Relacion con victima",
+                  "room": "Ubicacion",
+                  "availableQuestions": [
+                    {
+                      "id": "Q1",
+                      "text": "Pregunta inquisitiva sobre su coartada",
+                      "effectType": "TRUST",
+                      "effectValue": "-15"
+                    },
+                    {
+                      "id": "Q2",
+                      "text": "Pregunta para ganarse su confianza",
+                      "effectType": "TRUST",
+                      "effectValue": "10"
+                    }
+                  ]
                 }
               ],
               "clues": [
                 {
-                  "id": 1,
-                  "title": "Nombre pista",
-                  "locationName": "Lugar",
+                  "id": "C1",
+                  "title": "Nombre de la pista",
+                  "description": "Descripcion de lo que revela la pista",
+                  "linkedSuspects": ["S1"],
+                  "importance": 5,
+                  "locationName": "Nombre lugar",
                   "latitude": 34.05,
                   "longitude": -118.24,
-                  "description": "Lo que se encuentra",
-                  "ownerSuspectId": "ID del sospechoso al que incrimina (ej: S1)"
+                  "isAvailable": false,
+                  "isFound": false,
+                  "unlockConditionType": "INTERROGATION",
+                  "unlockConditionValue": "S1"
                 }
-              ]
+              ],
+              "solution": {
+                "guiltySuspectId": "ID del culpable",
+                "motive": "Motivo del crimen",
+                "keyEvidenceId": "ID de pista clave"
+              }
             }
-            Genera exactamente $suspectCount sospechosos (S1, S2, ..., S$suspectCount) y $clueCount pistas.
-            El campo "guiltyId" DEBE ser el ID de uno de los $suspectCount sospechosos.
-            Cada pista debe incriminar a un sospechoso mediante "ownerSuspectId".
-            Al menos una pista debe incriminar al culpable (guiltyId).
-            No incluyas alias. Solo devuelve el JSON, sin texto adicional.
+            Reglas del Interrogatorio:
+            - "availableQuestions" son opciones de diálogo predefinidas que el jugador puede elegir.
+            - "effectType" puede ser: "TRUST" (cambia trustLevel), "UNLOCK_CLUE" (hace disponible una pista), "CONTRADICTION" (añade una nueva contradicción revelada).
+            - "effectValue": valor numérico (ej: "-20") para TRUST, ID de pista para UNLOCK_CLUE, o texto para CONTRADICTION.
+            
+            Reglas del Clue System:
+            - "unlockConditionType" puede ser: "START" (disponible desde el inicio), "INTERROGATION" (se desbloquea al hablar con un sospechoso), "EXPLORATION" (se desbloquea tras explorar N veces), "CLUE" (se desbloquea al encontrar otra pista).
+            - "unlockConditionValue": ID del sospechoso (para INTERROGATION), número de veces (para EXPLORATION), o ID de pista (para CLUE).
+            
+            Genera exactamente $suspectCount sospechosos y al menos 6 pistas.
+            Asegurate de que las contradicciones sean sutiles y esten ligadas a las pistas.
+            Solo devuelve el JSON, sin texto adicional.
         """.trimIndent()
 
         return try {
@@ -79,7 +111,7 @@ class GroqService(apiKey: String) {
             )
             val response = api.getCompletion(cleanApiKey, request)
             val content = response.choices.firstOrNull()?.message?.content ?: return null
-            json.decodeFromString<GameCase>(content.trim())
+            json.decodeFromString<Case>(content.trim())
         } catch (e: Exception) {
             Log.e("GroqService", "Error: ${e.message}")
             null
@@ -87,13 +119,19 @@ class GroqService(apiKey: String) {
     }
 
     suspend fun getSuspectResponse(
-        suspectName: String,
-        personality: String,
+        suspect: Suspect,
         history: List<Pair<String, String>>,
         userMessage: String
     ): String {
-        val historyPrompt = history.joinToString("\n") { "${it.first}: ${it.second}" }
-        val systemPrompt = "Eres $suspectName, un sospechoso. Tu personalidad es $personality. Responde de forma breve en español. No uses asteriscos."
+        val systemPrompt = """
+            Eres ${suspect.name}. Tu personalidad es ${suspect.personality}. 
+            Tu coartada es: ${suspect.alibi}.
+            Tu nivel de confianza actual es ${suspect.trustLevel}/100.
+            Si tu confianza es baja (menor a 40), actua a la defensiva, nervioso o evasivo.
+            Tus contradicciones conocidas son: ${suspect.contradictions.joinToString()}.
+            Si mencionan una contradicción o algo relacionado, intenta negarlo nerviosamente.
+            Responde de forma breve y natural en español. No uses asteriscos.
+        """.trimIndent()
         
         val messages = mutableListOf<GroqMessage>()
         messages.add(GroqMessage("system", systemPrompt))
@@ -111,25 +149,27 @@ class GroqService(apiKey: String) {
         }
     }
 
-    suspend fun getDeductionAnalysis(
+    suspend fun analyzeClueConnection(
         caseTitle: String,
-        caseDescription: String,
-        assignments: Map<String, List<String>>
+        suspectName: String,
+        clues: List<String>
     ): String {
         val prompt = """
-            Eres el sistema operativo OBSIDIAN.
-            Analiza estas asignaciones para el caso "$caseTitle".
-            Descripción: $caseDescription
-            Asignaciones: ${assignments.entries.joinToString { "${it.key}: ${it.value}" }}
-            Di si son correctas en texto plano, sin simbolos.
+            Como sistema operativo OBSIDIAN, confirma una deducción lógica.
+            Caso: $caseTitle
+            Sospechoso implicado: $suspectName
+            Pistas conectadas: ${clues.joinToString(", ")}
+            
+            Escribe una conclusión técnica y breve (2 frases) en español que explique por qué estas pistas incriminan a este sospechoso. 
+            Sé directo. No uses markdown.
         """.trimIndent()
 
         return try {
             val request = GroqRequest(messages = listOf(GroqMessage("user", prompt)), response_format = null)
             val response = api.getCompletion(cleanApiKey, request)
-            response.choices.firstOrNull()?.message?.content ?: "Error de analisis."
+            response.choices.firstOrNull()?.message?.content ?: "Vínculo detectado: Los indicios apuntan a $suspectName."
         } catch (e: Exception) {
-            "Error de conexion."
+            "Deducción procesada: El vínculo con $suspectName es evidente."
         }
     }
 
@@ -150,13 +190,10 @@ class GroqService(apiKey: String) {
             Eres el sistema operativo OBSIDIAN.
             Genera un epilogo narrativo breve para el caso "$caseTitle".
             Descripcion del caso: $caseDescription
-            
             Resultado: $resultText
             
             Escribe un epilogo dramatico de 3-4 oraciones en español que cierre la historia.
-            Si el detective acerto, haz que suene como una victoria satisfactoria.
-            Si el detective fallo, haz que suene como una leccion aprendida.
-            IMPORTANTE: Responde solo con texto plano. No uses asteriscos, guiones al inicio, ni formato markdown.
+            Solo devuelve el texto plano sin markdown.
         """.trimIndent()
 
         return try {
