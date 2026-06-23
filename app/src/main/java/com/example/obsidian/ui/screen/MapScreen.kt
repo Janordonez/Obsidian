@@ -44,7 +44,8 @@ fun MapScreen(
     val gameState by viewModel.gameState.collectAsStateWithLifecycle()
     val isGenerating = viewModel.isGenerating
     val currentCase = gameState.currentCase
-    val availableClues = currentCase?.clues?.filter { it.isAvailable } ?: emptyList()
+
+    val allClues = currentCase?.clues ?: emptyList()
 
     var offset by remember { mutableStateOf(Offset.Zero) }
 
@@ -80,15 +81,19 @@ fun MapScreen(
 
         // Pistas Disponibles
         Box(modifier = Modifier.fillMaxSize().graphicsLayer(translationX = offset.x, translationY = offset.y)) {
-            availableClues.forEachIndexed { index, clue ->
-                val xPos = (200 + (index * 150)) % 800
-                val yPos = (300 + (index * 200)) % 1200
-                
-                ClueMarker(
-                    clue = clue,
-                    modifier = Modifier.offset { IntOffset(xPos, yPos) },
-                    onClick = { viewModel.collectClue(clue.id) }
-                )
+            allClues.forEachIndexed { originalIndex, clue ->
+                val shouldShowClue = clue.isAvailable || clue.unlockConditionType == "START"
+
+                if (shouldShowClue) {
+                    val yPos = (300 + (originalIndex * 200)) % 1200
+                    val xPos = (200 + (originalIndex * 150)) % 800
+
+                    ClueMarker(
+                        clue = clue,
+                        modifier = Modifier.offset { IntOffset(xPos, yPos) },
+                        onClick = { viewModel.collectClue(clue.id) }
+                    )
+                }
             }
         }
 
