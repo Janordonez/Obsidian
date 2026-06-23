@@ -30,7 +30,8 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     var savedMessageVisible by remember { mutableStateOf(false) }
-    val currentCase by viewModel.currentCase.collectAsState()
+    val gameState by viewModel.gameState.collectAsState()
+    val currentCase = gameState.currentCase
     val scrollState = rememberScrollState()
 
     Box(
@@ -135,7 +136,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     if (currentCase != null) {
-                        val case = currentCase!!
+                        val case = currentCase
                         CaseInfoItem(label = "CASE TITLE", value = case.title)
                         CaseInfoItem(label = "PRIMARY LOCATION", value = case.clues.firstOrNull()?.locationName ?: "Unknown")
                         CaseInfoItem(label = "SUSPECTS COUNT", value = "${case.suspects.size} Profiles")
@@ -177,7 +178,10 @@ fun SettingsScreen(
                 }
 
                 Button(
-                    onClick = { savedMessageVisible = true },
+                    onClick = { 
+                        viewModel.saveSettings()
+                        savedMessageVisible = true 
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black)
                 ) {
                     Text("SAVE SETTINGS", style = MaterialTheme.typography.labelLarge)

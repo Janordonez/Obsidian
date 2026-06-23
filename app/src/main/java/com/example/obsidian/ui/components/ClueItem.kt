@@ -29,7 +29,6 @@ import androidx.compose.ui.zIndex
 import com.example.obsidian.Items.Clue
 import com.example.obsidian.Items.CluesRepository
 import com.example.obsidian.ui.theme.SpaceGrotesk
-import com.example.obsidian.ui.theme.primary
 import kotlin.math.hypot
 import kotlin.math.pow
 import kotlin.math.roundToInt

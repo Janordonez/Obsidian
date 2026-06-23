@@ -3,41 +3,80 @@ package com.example.obsidian.data.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class GameCase(
-    val title: String,
-    val description: String,
-    val suspects: List<AISuspect>,
-    val clues: List<AIClue>,
-    val guiltyId: String = "" // ID of the guilty suspect
+enum class GamePhase {
+    INTRO, EXPLORE_SCENE, INTERROGATION, ANALYZE_EVIDENCE, ACCUSATION, VERDICT
+}
+
+@Serializable
+data class Solution(
+    val guiltySuspectId: String,
+    val motive: String,
+    val keyEvidenceId: String
 )
 
 @Serializable
-data class AISuspect(
+data class Case(
+    val id: String,
+    val title: String,
+    val description: String,
+    val suspects: List<Suspect>,
+    val clues: List<Clue>,
+    val solution: Solution
+)
+
+@Serializable
+data class Suspect(
     val id: String,
     val name: String,
-    val gender: String,
+    val gender: String = "MALE",
     val personality: String,
-    val background: String,
-    val relation: String,
-    val tension: Float,
-    val status: String,
-    val bpm: Int,
-    val caseNumber: String,
-    val room: String,
-    val alibi: String = "",
-    val imageId: Int = 0 
+    val alibi: String,
+    val contradictions: List<String>,
+    val trustLevel: Int = 50,
+    val relation: String = "",
+    val room: String = "",
+    val imageId: Int = 0,
+    val availableQuestions: List<Question> = emptyList()
 )
 
 @Serializable
-data class AIClue(
-    val id: Int,
+data class Question(
+    val id: String,
+    val text: String,
+    val effectType: String = "NONE", // "TRUST", "UNLOCK_CLUE", "CONTRADICTION"
+    val effectValue: String = ""
+)
+
+@Serializable
+data class Clue(
+    val id: String,
     val title: String,
-    val locationName: String,
-    val latitude: Double,
-    val longitude: Double,
     val description: String,
-    val ownerSuspectId: String, // The ID of the suspect this clue incriminates
-    val isFound: Boolean = false
+    val linkedSuspects: List<String>, 
+    val importance: Int,
+    val locationName: String = "",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val isAvailable: Boolean = false,
+    val isFound: Boolean = false,
+    val unlockConditionType: String = "START", 
+    val unlockConditionValue: String = ""
+)
+
+@Serializable
+data class GameState(
+    val currentCase: Case? = null,
+    val discoveredClues: List<Clue> = emptyList(),
+    val interrogatedSuspects: List<String> = emptyList(),
+    val explorationCount: Int = 0,
+    val phase: GamePhase = GamePhase.INTRO
+)
+
+@Serializable
+data class DeductionResult(
+    val isValid: Boolean,
+    val message: String,
+    val suspectId: String? = null
 )
 
 data class InterrogationMessage(
