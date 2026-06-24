@@ -65,7 +65,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.scalars)
-    implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+    implementation(libs.converter.gson)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     testImplementation(libs.junit)
