@@ -65,6 +65,54 @@ fun InterrogationScreen(
         return
     }
 
+    if (gameState.explorationCount < 1) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(BackgroundNoir)
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChatBubbleOutline,
+                    contentDescription = null,
+                    tint = AggressiveRed,
+                    modifier = Modifier.size(64.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "SALA DE INTERROGATORIOS BLOQUEADA",
+                    color = AggressiveRed,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Primero debes investigar el Puerto y encontrar al menos una pista antes de interrogar a los sospechosos.",
+                    color = Color.LightGray,
+                    fontSize = 13.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 18.sp
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = { navController.navigate(com.example.obsidian.navigation.Screen.Map.route) },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyanNeon, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("IR AL MAPA SCANNER", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        return
+    }
+
     var selectedSuspectId by remember(suspects) { mutableStateOf(suspects.firstOrNull()?.id ?: "") }
     val selectedSuspect = suspects.find { it.id == selectedSuspectId }
     val currentMessages = allMessages[selectedSuspectId] ?: emptyList()

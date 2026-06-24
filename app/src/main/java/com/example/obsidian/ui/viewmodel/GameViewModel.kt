@@ -10,12 +10,15 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.obsidian.BuildConfig
 import com.example.obsidian.data.model.*
+import com.example.obsidian.data.local.*
 import com.example.obsidian.data.remote.GeminiService
 import com.example.obsidian.data.remote.GroqService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
@@ -28,6 +31,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val groqService = GroqService(BuildConfig.GROQ_API_KEY)
     private val sharedPrefs = application.getSharedPreferences("obsidian_prefs", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
+    private val db = AppDatabase.getDatabase(application)
+    private val gameSaveDao = db.gameSaveDao()
     
     private val _gameState = MutableStateFlow(GameState())
     val gameState = _gameState.asStateFlow()
@@ -43,6 +48,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _gameResult = MutableStateFlow<GameResult?>(null)
     val gameResult = _gameResult.asStateFlow()
+
+    private val _unlockedClueAlert = MutableStateFlow<Clue?>(null)
+    val unlockedClueAlert = _unlockedClueAlert.asStateFlow()
+
+    fun clearUnlockedClueAlert() {
+        _unlockedClueAlert.value = null
+    }
 
     // Configuración de Audio
     var isEffectsEnabled by mutableStateOf(sharedPrefs.getBoolean("effects_enabled", true))
@@ -62,117 +74,103 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     init { loadSavedCase() }
 
     private fun loadSavedCase() {
-        val savedCaseJson = sharedPrefs.getString("current_case", null)
-        if (savedCaseJson != null) {
+        viewModelScope.launch {
             try {
-                val savedCase = json.decodeFromString<Case>(savedCaseJson)
-                _gameState.value = _gameState.value.copy(
-                    currentCase = savedCase, 
-                    phase = GamePhase.EXPLORE_SCENE
-                )
-            } catch (e: Exception) { Log.e("GameViewModel", "Error loading case", e) }
+                val save = withContext(Dispatchers.IO) { gameSaveDao.getSave() }
+                if (save != null) {
+                    val savedState = json.decodeFromString<GameState>(save.serializedState)
+                    _gameState.value = savedState
+                    _messages.value = savedState.messages
+                    _gameResult.value = savedState.gameResult
+                } else {
+                    loadDefaultCase()
+                }
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error loading game state from Room", e)
+                loadDefaultCase()
+            }
         }
     }
 
-    fun saveSettings() {
-        sharedPrefs.edit().apply {
-            putBoolean("effects_enabled", isEffectsEnabled)
-            putFloat("effects_volume", effectsVolume)
-            putBoolean("music_enabled", isMusicEnabled)
-            putFloat("music_volume", musicVolume)
-            apply()
+    private fun loadDefaultCase() {
+        val case = CaseRepository.laCargaDelSilencio
+        val initialState = GameState(
+            currentCase = case,
+            phase = GamePhase.INTRO
+        )
+        _gameState.value = initialState
+        _messages.value = case.suspects.associate { it.id to listOf(
+            InterrogationMessage("SISTEMA", "EXPEDIENTE INICIADO", false, getCurrentTime())
+        ) }
+        saveGameState(initialState)
+    }
+
+    private fun saveGameState(state: GameState) {
+        viewModelScope.launch {
+            try {
+                val serialized = json.encodeToString(state)
+                withContext(Dispatchers.IO) {
+                    gameSaveDao.insertSave(GameSaveEntity(serializedState = serialized))
+                }
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error saving game state to Room", e)
+            }
         }
     }
 
     fun startNewInvestigation() {
-        viewModelScope.launch {
-            isGenerating = true
-            errorMessage = null
-            _selectedClues.value = emptySet()
-            _deductionResult.value = null
-            _gameResult.value = null
-            try {
-                val newCase = geminiService.generateCase(3) ?: groqService.generateCase(3)
-                if (newCase != null) {
-                    _gameState.value = GameState(currentCase = newCase, phase = GamePhase.EXPLORE_SCENE)
-                    saveCase(newCase)
-                    _messages.value = newCase.suspects.associate { it.id to listOf(
-                        InterrogationMessage("SISTEMA", "EXPEDIENTE INICIADO", false, getCurrentTime())
-                    ) }
-                } else { errorMessage = "Error de conexión con IA." }
-            } catch (e: Exception) { errorMessage = e.message }
-            isGenerating = false
-        }
+        _selectedClues.value = emptySet()
+        _deductionResult.value = null
+        _gameResult.value = null
+        loadDefaultCase()
     }
 
-    private fun saveCase(case: Case) {
-        sharedPrefs.edit().putString("current_case", json.encodeToString(case)).apply()
-    }
-
-    fun exploreScene() {
-        _gameState.update { it.copy(explorationCount = it.explorationCount + 1) }
-        checkAndUnlockClues()
+    fun exploreScene(locationId: String) {
+        val newState = GameEngine.exploreLocation(_gameState.value, locationId)
+        updateGameState(newState)
     }
 
     fun collectClue(clueId: String) {
-        _gameState.update { state ->
-            val case = state.currentCase ?: return@update state
-            val updatedClues = case.clues.map { 
-                if (it.id == clueId) it.copy(isFound = true) else it 
-            }
-            state.copy(currentCase = case.copy(clues = updatedClues))
-        }
-        checkAndUnlockClues()
+        val newState = GameEngine.exploreLocation(_gameState.value, clueId)
+        updateGameState(newState)
     }
 
-    private fun checkAndUnlockClues() {
-        _gameState.update { state ->
-            val case = state.currentCase ?: return@update state
-            val updatedClues = case.clues.map { clue ->
-                if (clue.isAvailable) return@map clue
-                
-                val isUnlocked = when (clue.unlockConditionType) {
-                    "INTERROGATION" -> state.interrogatedSuspects.contains(clue.unlockConditionValue)
-                    "EXPLORATION" -> state.explorationCount >= (clue.unlockConditionValue.toIntOrNull() ?: 2)
-                    "CLUE" -> case.clues.any { it.id == clue.unlockConditionValue && it.isFound }
-                    "START" -> true
-                    else -> false
-                }
-                
-                if (isUnlocked) clue.copy(isAvailable = true) else clue
+    fun applyMinigameResult(locationName: String, result: String) {
+        val newState = GameEngine.applyMinigameResult(_gameState.value, locationName, result)
+        updateGameState(newState)
+    }
+
+    fun startInvestigation() {
+        val newState = GameEngine.navigateToPhase(_gameState.value, GamePhase.EXPLORE_SCENE)
+        updateGameState(newState)
+    }
+
+    fun linkClueToSuspect(clueId: String, suspectId: String?) {
+        val currentSuspectId = suspectId ?: ""
+        val newState = GameEngine.linkClueToSuspect(_gameState.value, clueId, currentSuspectId)
+        updateGameState(newState)
+    }
+
+    private fun updateGameState(newState: GameState) {
+        val oldAvailableClueIds = _gameState.value.currentCase?.clues?.filter { it.isAvailable }?.map { it.id }?.toSet() ?: emptySet()
+        val newAvailableClues = newState.currentCase?.clues?.filter { it.isAvailable } ?: emptyList()
+        val newlyUnlocked = newAvailableClues.filter { it.id !in oldAvailableClueIds }
+        
+        _gameState.value = newState
+        _messages.value = newState.messages
+        _gameResult.value = newState.gameResult
+        saveGameState(newState)
+        
+        if (oldAvailableClueIds.isNotEmpty() && newlyUnlocked.isNotEmpty()) {
+            newlyUnlocked.forEach { clue ->
+                _unlockedClueAlert.value = clue
             }
-            state.copy(currentCase = case.copy(clues = updatedClues))
         }
     }
 
     fun onQuestionSelected(suspect: Suspect, question: Question) {
-        updateMessages(suspect.id, InterrogationMessage("INVESTIGADOR", question.text, true, getCurrentTime()))
-        
-        _gameState.update { state ->
-            val case = state.currentCase ?: return@update state
-            var updatedSuspect = suspect
-            when (question.effectType) {
-                "TRUST" -> {
-                    val change = question.effectValue.toIntOrNull() ?: 0
-                    updatedSuspect = suspect.copy(trustLevel = (suspect.trustLevel + change).coerceIn(0, 100))
-                }
-                "CONTRADICTION" -> {
-                    updatedSuspect = suspect.copy(contradictions = suspect.contradictions + question.effectValue)
-                }
-            }
-            val updatedSuspects = case.suspects.map { if (it.id == suspect.id) updatedSuspect else it }
-            state.copy(
-                currentCase = case.copy(suspects = updatedSuspects), 
-                interrogatedSuspects = (state.interrogatedSuspects + suspect.id).distinct()
-            )
-        }
-        checkAndUnlockClues()
-        
-        viewModelScope.launch {
-            val history = _messages.value[suspect.id]?.takeLast(5)?.map { (if (it.isDetective) "Detective" else suspect.name) to it.text } ?: emptyList()
-            val response = geminiService.getSuspectResponse(suspect, history, question.text)
-            updateMessages(suspect.id, InterrogationMessage(suspect.name, response, false, getCurrentTime()))
-        }
+        val newState = GameEngine.askQuestion(_gameState.value, suspect.id, question.id)
+        updateGameState(newState)
     }
 
     fun sendMessage(suspect: Suspect, text: String) {
@@ -216,20 +214,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     message = analysis,
                     suspectId = suspectId
                 )
-                updateSuspectTrust(suspectId, (suspect?.trustLevel ?: 50) - 15)
+                val updatedSuspects = case.suspects.map {
+                    if (it.id == suspectId) it.copy(trustLevel = (it.trustLevel - 15).coerceIn(0, 100)) else it
+                }
+                updateGameState(_gameState.value.copy(currentCase = case.copy(suspects = updatedSuspects)))
             } else {
                 _deductionResult.value = DeductionResult(false, "RELACIÓN DÉBIL: No hay una conexión lógica clara entre estos elementos.")
             }
-        }
-    }
-
-    private fun updateSuspectTrust(suspectId: String, newTrust: Int) {
-        _gameState.update { state ->
-            val case = state.currentCase ?: return@update state
-            val updatedSuspects = case.suspects.map {
-                if (it.id == suspectId) it.copy(trustLevel = newTrust) else it
-            }
-            state.copy(currentCase = case.copy(suspects = updatedSuspects))
         }
     }
 
@@ -237,32 +228,38 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val map = _messages.value.toMutableMap()
         map[id] = (map[id] ?: emptyList()) + msg
         _messages.value = map
+        
+        _gameState.update { it.copy(messages = map) }
+        saveGameState(_gameState.value)
     }
 
-    fun submitAccusation(accusedId: String) {
-        val case = _gameState.value.currentCase ?: return
-        viewModelScope.launch {
-            isSubmittingAccusation = true
-            val isCorrect = accusedId == case.solution.guiltySuspectId
-            val accused = case.suspects.find { it.id == accusedId }
-            val guilty = case.suspects.find { it.id == case.solution.guiltySuspectId }
-            
-            val epilogue = groqService.generateEpilogue(case.title, case.description, guilty?.name ?: "", accused?.name ?: "", isCorrect)
-            
-            _gameResult.value = GameResult(
-                isCorrect = isCorrect,
-                accusedSuspectName = accused?.name ?: "",
-                actualGuiltyName = guilty?.name ?: "",
-                epilogue = epilogue,
-                correctClueAssignments = 0,
-                totalClues = case.clues.size
-            )
-            _gameState.update { it.copy(phase = GamePhase.VERDICT) }
-            isSubmittingAccusation = false
+    fun submitAccusation(accusedId: String, keyEvidenceId: String) {
+        isSubmittingAccusation = true
+        val updatedState = GameEngine.submitAccusation(_gameState.value, accusedId, keyEvidenceId)
+        updateGameState(updatedState)
+        isSubmittingAccusation = false
+    }
+
+    fun saveSettings() {
+        sharedPrefs.edit().apply {
+            putBoolean("effects_enabled", isEffectsEnabled)
+            putFloat("effects_volume", effectsVolume)
+            putBoolean("music_enabled", isMusicEnabled)
+            putFloat("music_volume", musicVolume)
+            apply()
         }
     }
 
     fun resetGame() {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    gameSaveDao.deleteSave()
+                }
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error deleting game save from Room", e)
+            }
+        }
         _gameState.value = GameState()
         _selectedClues.value = emptySet()
         _deductionResult.value = null
