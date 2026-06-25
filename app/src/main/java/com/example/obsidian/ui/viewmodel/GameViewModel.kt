@@ -110,7 +110,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val serialized = json.encodeToString(state)
                 withContext(Dispatchers.IO) {
-                    gameSaveDao.insertSave(GameSaveEntity(serializedState = serialized))
+                    gameSaveDao.insertSave(GameSaveEntity(serialized))
                 }
             } catch (e: Exception) {
                 Log.e("GameViewModel", "Error saving game state to Room", e)
