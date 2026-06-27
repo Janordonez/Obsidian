@@ -8,8 +8,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,10 +22,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.obsidian.data.model.GameState
 import com.example.obsidian.ui.theme.BackgroundNoir
 import com.example.obsidian.ui.theme.CyanNeon
 import com.example.obsidian.ui.theme.neonYellow
@@ -35,8 +37,6 @@ fun MinigamesOverlay(
     viewModel: GameViewModel,
     onDismiss: () -> Unit
 ) {
-    val gameState by viewModel.gameState.collectAsStateWithLifecycle()
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -48,47 +48,22 @@ fun MinigamesOverlay(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.9f)
+                .fillMaxHeight(0.92f)
                 .border(2.dp, CyanNeon, RoundedCornerShape(12.dp)),
             colors = CardDefaults.cardColors(containerColor = BackgroundNoir),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = locationName.uppercase(),
-                        color = CyanNeon,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 16.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "DIAGNOSTIC MODE",
-                        color = neonYellow,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
+            Column(modifier = Modifier.fillMaxSize()) {
+                MinigameCompactHeader(
+                    locationName = locationName,
+                    onDismiss = onDismiss
+                )
 
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider(color = CyanNeon.copy(alpha = 0.3f), thickness = 1.dp)
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Select Minigame Content based on location
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     when (locationName) {
                         "Almacén del Puerto" -> ContainerMinigame(viewModel, onDismiss)
@@ -105,6 +80,64 @@ fun MinigamesOverlay(
             }
         }
     }
+}
+
+@Composable
+private fun MinigameCompactHeader(locationName: String, onDismiss: () -> Unit) {
+    val shortTitle = when (locationName) {
+        "Oficina de Importaciones Atlántico" -> "OFICINA · IMPORTACIONES"
+        "Almacén del Puerto" -> "ALMACÉN · PUERTO"
+        "Caseta de Aduanas" -> "CASETA · ADUANAS"
+        "Residencia Mendoza" -> "RESIDENCIA · MENDOZA"
+        "Estudio de Abogados" -> "ESTUDIO · ABOGADOS"
+        else -> locationName.uppercase()
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = 0.35f))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = shortTitle,
+            color = CyanNeon,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Surface(
+            color = neonYellow.copy(alpha = 0.15f),
+            shape = RoundedCornerShape(4.dp),
+            border = BorderStroke(1.dp, neonYellow.copy(alpha = 0.4f))
+        ) {
+            Text(
+                text = "SCAN",
+                color = neonYellow,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.size(28.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Cerrar",
+                tint = Color.Gray,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+    HorizontalDivider(color = CyanNeon.copy(alpha = 0.25f), thickness = 1.dp)
 }
 
 // ----------------------------------------------------
@@ -289,162 +322,263 @@ fun ContainerMinigame(viewModel: GameViewModel, onDismiss: () -> Unit) {
 // ----------------------------------------------------
 @Composable
 fun ShreddedDocumentMinigame(viewModel: GameViewModel, onDismiss: () -> Unit) {
-    var timeLeft by remember { mutableStateOf(75) }
+    val roundSeconds = 50
+    var timeLeft by remember { mutableIntStateOf(roundSeconds) }
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
     var isDone by remember { mutableStateOf(false) }
+    var reshuffleCount by remember { mutableIntStateOf(0) }
+    var statusMessage by remember { mutableStateOf("") }
 
     val correctPieces = remember {
         listOf(
-            "...Logística del Car...",
-            "...ibes SAS...",
-            "...importe neto: $48.0...",
-            "...00...",
-            "...firmado: C. Herr...",
-            "...era...",
-            "...no declarar el con...",
-            "...tenedor...",
-            "...peso real: 12t...",
-            "...declarado: 24t...",
-            "...evadir aduana...",
-            "...sello roto..."
+            "Empresa fachada: Importaciones Atlántico",
+            "Logística del Caribe SAS",
+            "Coordinar despacho nocturno urgente",
+            "Instrucción: no declarar el contenedor",
+            "Peso real registrado: 24 toneladas",
+            "Peso declarado en aduana: 12 toneladas",
+            "Manipular sello de seguridad roto",
+            "Evadir control aduanero del puerto",
+            "Firmado: Carlos Herrera",
+            "Destruir borrador tras leer instrucciones",
+            "Nota encontrada en basura de oficina"
         )
     }
 
-    // Shuffled list with original index tracked
-    val pieces = remember {
+    val solvedOrder = remember(correctPieces) { correctPieces.indices.toList() }
+
+    val pieces = remember(correctPieces) {
         val original = correctPieces.mapIndexed { idx, text -> Pair(idx, text) }.toMutableList()
-        // Ensure it is shuffled but not solved
         do {
             original.shuffle()
-        } while (original.map { it.first } == (0 until 12).toList())
+        } while (original.map { it.first } == solvedOrder)
         mutableStateListOf<Pair<Int, String>>().apply { addAll(original) }
     }
 
-    LaunchedEffect(key1 = timeLeft) {
-        if (timeLeft > 0 && !isDone) {
-            delay(1000)
-            timeLeft -= 1
-        } else if (timeLeft == 0 && !isDone) {
-            viewModel.applyMinigameResult("Oficina de Importaciones Atlántico", "LOST")
-            onDismiss()
+    fun reshufflePieces() {
+        val snapshot = pieces.toList()
+        var shuffled = snapshot.shuffled()
+        var safety = 0
+        while (shuffled.map { it.first } == solvedOrder && safety < 20) {
+            shuffled = snapshot.shuffled()
+            safety++
+        }
+        pieces.clear()
+        pieces.addAll(shuffled)
+        selectedIndex = null
+    }
+
+    fun checkWinCondition() {
+        if (pieces.map { it.first } == solvedOrder) {
+            isDone = true
+            statusMessage = ""
         }
     }
 
-    // Check Win
-    fun checkWinCondition() {
-        val currentOrder = pieces.map { it.first }
-        if (currentOrder == (0 until 12).toList()) {
-            isDone = true
+    LaunchedEffect(isDone, roundSeconds) {
+        while (!isDone) {
+            delay(1000)
+            if (timeLeft > 1) {
+                timeLeft -= 1
+            } else {
+                reshufflePieces()
+                reshuffleCount += 1
+                timeLeft = roundSeconds
+                statusMessage = "¡Tiempo agotado! Los fragmentos se han revuelto. Ronda $reshuffleCount."
+            }
         }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("TIEMPO: ${timeLeft}s", color = if (timeLeft < 15) Color.Red else neonYellow, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            Text("RECONSTRUIR DOCUMENTO", color = CyanNeon, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-        }
+        if (!isDone) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${timeLeft}s",
+                    color = if (timeLeft <= 10) Color.Red else neonYellow,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp
+                )
+                if (reshuffleCount > 0) {
+                    Text(
+                        text = "Revueltos ×$reshuffleCount",
+                        color = neonYellow,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                Text(
+                    text = "Toca 2 frases para intercambiar",
+                    color = Color.Gray,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
 
-        Text(
-            text = "Toca un fragmento y luego otro para intercambiar sus posiciones. Organízalos de forma que el texto fluya coherentemente en una grilla de 3 columnas.",
-            color = Color.LightGray,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(bottom = 8.dp),
-            textAlign = TextAlign.Center
-        )
+            if (statusMessage.isNotEmpty()) {
+                Text(
+                    text = statusMessage,
+                    color = neonYellow,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
-        // 3x4 Grid of Shredded Pieces
-        Column(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            for (row in 0 until 4) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    for (col in 0 until 3) {
-                        val index = row * 3 + col
-                        val piece = pieces[index]
-                        val isSelected = selectedIndex == index
-                        val isCorrectPos = piece.first == index
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .background(
-                                    if (isSelected) CyanNeon.copy(alpha = 0.25f)
-                                    else if (isCorrectPos) Color(0xFF0F2C20)
-                                    else Color(0xFF16161A),
-                                    RoundedCornerShape(6.dp)
-                                )
-                                .border(
-                                    1.dp,
-                                    if (isSelected) CyanNeon
-                                    else if (isCorrectPos) Color.Green.copy(alpha = 0.5f)
-                                    else Color.DarkGray,
-                                    RoundedCornerShape(6.dp)
-                                )
-                                .clickable {
-                                    if (selectedIndex == null) {
-                                        selectedIndex = index
-                                    } else {
-                                        val firstIdx = selectedIndex!!
-                                        val temp = pieces[firstIdx]
-                                        pieces[firstIdx] = pieces[index]
-                                        pieces[index] = temp
-                                        selectedIndex = null
-                                        checkWinCondition()
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = piece.second,
-                                color = if (isCorrectPos) Color.Green else Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(4.dp)
-                            )
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 8.dp)
+            ) {
+                itemsIndexed(pieces) { index, piece ->
+                    DocumentFragmentRow(
+                        text = piece.second,
+                        positionLabel = index + 1,
+                        isSelected = selectedIndex == index,
+                        isCorrectPosition = piece.first == index,
+                        onClick = {
+                            if (selectedIndex == null) {
+                                selectedIndex = index
+                            } else {
+                                val firstIdx = selectedIndex!!
+                                val temp = pieces[firstIdx]
+                                pieces[firstIdx] = pieces[index]
+                                pieces[index] = temp
+                                selectedIndex = null
+                                checkWinCondition()
+                            }
                         }
-                    }
+                    )
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (isDone) {
+        } else {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF0F2C20)),
-                modifier = Modifier.fillMaxWidth().border(1.dp, Color.Green, RoundedCornerShape(8.dp))
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .border(1.dp, Color.Green, RoundedCornerShape(8.dp))
             ) {
-                Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("¡DOCUMENTO COMPLETAMENTE RECONSTRUIDO!", color = Color.Green, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
                     Text(
-                        text = "Contenido: 'Logística del Caribe SAS... importe neto: $48.000... firmado: C. Herrera... no declarar el contenedor... peso real: 12t... declarado: 24t... evadir aduanas... sello roto...'",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center
+                        text = "¡DOCUMENTO RECONSTRUIDO!",
+                        color = Color.Green,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    correctPieces.forEachIndexed { index, line ->
+                        Text(
+                            text = "${index + 1}. $line",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Instrucciones de fraude firmadas por Carlos Herrera, con discrepancia de pesos y orden de evadir aduanas.",
+                        color = Color.LightGray,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
                             viewModel.applyMinigameResult("Oficina de Importaciones Atlántico", "WON")
                             onDismiss()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Green, contentColor = Color.Black),
-                        modifier = Modifier.fillMaxWidth().height(36.dp)
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
                     ) {
                         Text("FINALIZAR", fontWeight = FontWeight.Bold)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DocumentFragmentRow(
+    text: String,
+    positionLabel: Int,
+    isSelected: Boolean,
+    isCorrectPosition: Boolean,
+    onClick: () -> Unit
+) {
+    val borderColor = when {
+        isSelected -> CyanNeon
+        isCorrectPosition -> Color(0xFF3DDC84)
+        else -> Color(0xFF33333A)
+    }
+    val backgroundColor = when {
+        isSelected -> CyanNeon.copy(alpha = 0.12f)
+        isCorrectPosition -> Color(0xFF0F2C20)
+        else -> Color(0xFF141418)
+    }
+
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = backgroundColor,
+        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 28.dp, height = 28.dp)
+                    .background(
+                        if (isCorrectPosition) Color(0xFF3DDC84).copy(alpha = 0.2f)
+                        else Color.Black.copy(alpha = 0.4f),
+                        RoundedCornerShape(6.dp)
+                    )
+                    .border(1.dp, borderColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = positionLabel.toString().padStart(2, '0'),
+                    color = if (isCorrectPosition) Color(0xFF3DDC84) else Color.Gray,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+            Text(
+                text = text,
+                color = if (isCorrectPosition) Color(0xFFE8FFF0) else Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Normal,
+                lineHeight = 18.sp,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }

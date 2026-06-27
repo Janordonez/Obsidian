@@ -33,20 +33,57 @@ class GameEngineTest {
     fun testInterrogationUnlocks() {
         var state = createInitialState()
 
-        // 1. Interrogating Carlos unlocks clue_bancos
         state = GameEngine.endInterrogation(state, "suspect_carlos")
         val bancos = state.currentCase!!.clues.find { it.id == "clue_bancos" }
         assertTrue("clue_bancos should be available after Carlos interrogation", bancos!!.isAvailable)
 
-        // 2. Interrogating Marisol unlocks clue_agenda
         state = GameEngine.endInterrogation(state, "suspect_marisol")
         val agenda = state.currentCase!!.clues.find { it.id == "clue_agenda" }
         assertTrue("clue_agenda should be available after Marisol interrogation", agenda!!.isAvailable)
 
-        // 3. Interrogating Tomás unlocks clue_camara
         state = GameEngine.endInterrogation(state, "suspect_tomas")
         val camara = state.currentCase!!.clues.find { it.id == "clue_camara" }
         assertTrue("clue_camara should be available after Tomás interrogation", camara!!.isAvailable)
+    }
+
+    @Test
+    fun testInterrogationSessionLimits() {
+        GameEngine.randomFloatForTest = { 0.0f }
+        try {
+            var state = createInitialState()
+            state = GameEngine.startInterrogation(state, "suspect_carlos")
+
+            state = GameEngine.askQuestion(state, "suspect_carlos", "q_carlos_1")
+            assertEquals(1, state.interrogationSessions["suspect_carlos"]?.questionsThisRound)
+
+            state = GameEngine.askQuestion(state, "suspect_carlos", "q_carlos_2")
+            state = GameEngine.askQuestion(state, "suspect_carlos", "q_carlos_3")
+            assertEquals(0, state.interrogationSessions["suspect_carlos"]?.questionsThisRound)
+
+            assertFalse("Should not be marked interrogated until endInterrogation",
+                state.interrogatedSuspects.contains("suspect_carlos"))
+
+            state = GameEngine.endInterrogation(state, "suspect_carlos")
+            assertTrue(state.interrogatedSuspects.contains("suspect_carlos"))
+            assertNotNull(state.interrogationSummaries["suspect_carlos"])
+        } finally {
+            GameEngine.randomFloatForTest = null
+        }
+    }
+
+    @Test
+    fun testWarehouseMinigameExplorationCount() {
+        var state = createInitialState()
+        assertEquals(0, state.explorationCount)
+
+        state = GameEngine.applyMinigameResult(state, "Almacén del Puerto", "WON")
+        assertEquals("Winning warehouse should increment explorationCount", 1, state.explorationCount)
+        assertTrue(state.discoveredClues.any { it.id == "clue_manifiesto" })
+
+        var stateLost = createInitialState()
+        stateLost = GameEngine.applyMinigameResult(stateLost, "Almacén del Puerto", "LOST")
+        assertEquals("Losing warehouse should NOT increment explorationCount", 0, stateLost.explorationCount)
+        assertTrue(stateLost.blockedLocations.containsKey("Almacén del Puerto"))
     }
 
     @Test
@@ -93,63 +130,116 @@ class GameEngineTest {
 
     @Test
     fun testValentinaQuestionConditionalEffect() {
-        // CASE A: Carlos NOT interrogated before asking Valentina
-        var stateA = createInitialState()
-        val initialTrust = stateA.currentCase!!.suspects.find { it.id == "suspect_valentina" }!!.trustLevel
+        GameEngine.randomFloatForTest = { 0.0f }
+        try {
+            var stateA = createInitialState()
+            val initialTrust = stateA.currentCase!!.suspects.find { it.id == "suspect_valentina" }!!.trustLevel
 
-        stateA = GameEngine.askQuestion(stateA, "suspect_valentina", "q_valentina_4") // ask about Logística
-        val banksA = stateA.currentCase!!.clues.find { it.id == "clue_bancos" }
-        val updatedTrustA = stateA.currentCase!!.suspects.find { it.id == "suspect_valentina" }!!.trustLevel
+            stateA = GameEngine.startInterrogation(stateA, "suspect_valentina")
+            stateA = GameEngine.askQuestion(stateA, "suspect_valentina", "q_valentina_1")
+            stateA = GameEngine.askQuestion(stateA, "suspect_valentina", "q_valentina_2")
+            stateA = GameEngine.askQuestion(stateA, "suspect_valentina", "q_valentina_3")
+            stateA = GameEngine.askQuestion(stateA, "suspect_valentina", "q_valentina_4")
+            val banksA = stateA.currentCase!!.clues.find { it.id == "clue_bancos" }
+            val updatedTrustA = stateA.currentCase!!.suspects.find { it.id == "suspect_valentina" }!!.trustLevel
 
-        assertFalse("clue_bancos should NOT unlock if Carlos was not interrogated", banksA!!.isAvailable)
-        assertTrue("Valentina trust should decrease", updatedTrustA < initialTrust)
+            assertFalse("clue_bancos should NOT unlock if Carlos was not interrogated", banksA!!.isAvailable)
+            assertTrue("Valentina trust should decrease", updatedTrustA < initialTrust)
 
-        // CASE B: Carlos HAS been interrogated before asking Valentina
-        var stateB = createInitialState()
-        stateB = GameEngine.endInterrogation(stateB, "suspect_carlos") // Interrogate Carlos
-        
-        stateB = GameEngine.askQuestion(stateB, "suspect_valentina", "q_valentina_4") // ask about Logística
-        val banksB = stateB.currentCase!!.clues.find { it.id == "clue_bancos" }
-        
-        assertTrue("clue_bancos should unlock if Carlos was interrogated", banksB!!.isAvailable)
+            var stateB = createInitialState()
+            stateB = GameEngine.endInterrogation(stateB, "suspect_carlos")
+
+            stateB = GameEngine.startInterrogation(stateB, "suspect_valentina")
+            stateB = GameEngine.askQuestion(stateB, "suspect_valentina", "q_valentina_1")
+            stateB = GameEngine.askQuestion(stateB, "suspect_valentina", "q_valentina_2")
+            stateB = GameEngine.askQuestion(stateB, "suspect_valentina", "q_valentina_3")
+            stateB = GameEngine.askQuestion(stateB, "suspect_valentina", "q_valentina_4")
+            val banksB = stateB.currentCase!!.clues.find { it.id == "clue_bancos" }
+
+            assertTrue("clue_bancos should unlock if Carlos was interrogated", banksB!!.isAvailable)
+        } finally {
+            GameEngine.randomFloatForTest = null
+        }
     }
 
     @Test
     fun testSuspectTrustLock() {
-        var state = createInitialState()
-        
-        // Force Carlos trust level to 0
-        val case = state.currentCase!!
-        val lockedCarlos = case.suspects.find { it.id == "suspect_carlos" }!!.copy(trustLevel = 0)
-        state = state.copy(
-            currentCase = case.copy(
-                suspects = case.suspects.map { if (it.id == "suspect_carlos") lockedCarlos else it }
-            )
-        )
+        GameEngine.randomFloatForTest = { 0.0f }
+        try {
+            var state = createInitialState()
 
-        // Ask question
-        val nextState = GameEngine.askQuestion(state, "suspect_carlos", "q_carlos_2")
-        
-        // Verify no changes to trust or messages other than system lock notice
-        val finalCarlos = nextState.currentCase!!.suspects.find { it.id == "suspect_carlos" }!!
-        assertEquals("Trust should remain 0", 0, finalCarlos.trustLevel)
-        
-        val lastMessage = nextState.messages["suspect_carlos"]?.last()
-        assertNotNull(lastMessage)
-        assertEquals("SISTEMA", lastMessage!!.sender)
-        assertTrue(lastMessage.text.contains("se niega a cooperar"))
+            val case = state.currentCase!!
+            val lockedCarlos = case.suspects.find { it.id == "suspect_carlos" }!!.copy(trustLevel = 0)
+            state = state.copy(
+                currentCase = case.copy(
+                    suspects = case.suspects.map { if (it.id == "suspect_carlos") lockedCarlos else it }
+                )
+            )
+
+            state = GameEngine.startInterrogation(state, "suspect_carlos")
+            val nextState = GameEngine.askQuestion(state, "suspect_carlos", "q_carlos_2")
+
+            val finalCarlos = nextState.currentCase!!.suspects.find { it.id == "suspect_carlos" }!!
+            assertEquals("Trust should remain 0", 0, finalCarlos.trustLevel)
+
+            val lastMessage = nextState.messages["suspect_carlos"]?.last()
+            assertNotNull(lastMessage)
+            assertEquals("SISTEMA", lastMessage!!.sender)
+            assertTrue(lastMessage.text.contains("se niega a cooperar"))
+        } finally {
+            GameEngine.randomFloatForTest = null
+        }
+    }
+
+    @Test
+    fun testPersonalityApproachCompatibility() {
+        assertTrue(GameEngine.isApproachCompatibleWithPersonality("suspect_carlos", "EMPÁTICO"))
+        assertFalse(GameEngine.isApproachCompatibleWithPersonality("suspect_carlos", "PRESIÓN"))
+        assertTrue(GameEngine.isApproachCompatibleWithPersonality("suspect_valentina", "TÉCNICO"))
+        assertFalse(GameEngine.isApproachCompatibleWithPersonality("suspect_valentina", "EMPÁTICO"))
+        assertTrue(GameEngine.isApproachCompatibleWithPersonality("suspect_tomas", "DIRECTO"))
+        assertFalse(GameEngine.isApproachCompatibleWithPersonality("suspect_tomas", "EMPÁTICO"))
+        assertTrue(GameEngine.isApproachCompatibleWithPersonality("suspect_marisol", "EMPÁTICO"))
+        assertFalse(GameEngine.isApproachCompatibleWithPersonality("suspect_marisol", "PRESIÓN"))
+
+        GameEngine.randomFloatForTest = { 0.5f }
+        try {
+            var state = createInitialState()
+            state = GameEngine.startInterrogation(state, "suspect_carlos")
+            state = GameEngine.askQuestion(state, "suspect_carlos", "q_carlos_1")
+            val afterEmpatico = state.currentCase!!.suspects.find { it.id == "suspect_carlos" }!!
+            assertTrue(
+                "Empathetic approach should reveal on nervous Carlos",
+                afterEmpatico.contradictions.isNotEmpty()
+            )
+
+            state = GameEngine.startInterrogation(state, "suspect_valentina")
+            state = GameEngine.askQuestion(state, "suspect_valentina", "q_valentina_7")
+            val valentinaMsg = state.messages["suspect_valentina"]?.last()?.text.orEmpty()
+            assertTrue(
+                "Emotional approach should get cold evasive reply on Valentina",
+                valentinaMsg.contains("sentimientos") || valentinaMsg.contains("libros")
+            )
+        } finally {
+            GameEngine.randomFloatForTest = null
+        }
     }
 
     @Test
     fun testContradictionRecording() {
-        var state = createInitialState()
-        
-        state = GameEngine.askQuestion(state, "suspect_carlos", "q_carlos_1") // Contradiction: signature
-        
-        val carlos = state.currentCase!!.suspects.find { it.id == "suspect_carlos" }!!
-        assertTrue("Contradiction list should contain the contradiction details", 
-            carlos.contradictions.contains("su firma está en el manifiesto (dice no recordarlo)"))
-        assertEquals(1, state.progress.contradictionsFound)
+        GameEngine.randomFloatForTest = { 0.0f }
+        try {
+            var state = createInitialState()
+            state = GameEngine.startInterrogation(state, "suspect_carlos")
+            state = GameEngine.askQuestion(state, "suspect_carlos", "q_carlos_1")
+
+            val carlos = state.currentCase!!.suspects.find { it.id == "suspect_carlos" }!!
+            assertTrue("Contradiction list should contain the contradiction details",
+                carlos.contradictions.contains("su firma está en el manifiesto (dice no recordarlo)"))
+            assertEquals(1, state.progress.contradictionsFound)
+        } finally {
+            GameEngine.randomFloatForTest = null
+        }
     }
 
     @Test
@@ -202,7 +292,10 @@ class GameEngineTest {
         state = GameEngine.linkClueToSuspect(state, "clue_usb", "suspect_carlos") // correct
         state = GameEngine.linkClueToSuspect(state, "clue_agenda", "suspect_marisol") // incorrect (should be carlos/marisol, wait: clue_agenda is linked to carlos & marisol, so it is correct!)
         
-        // A: Correct accusation
+        // A: Correct accusation (requires 3 Carlos contradictions)
+        state = state.copy(
+            discoveredContradictions = setOf("carlos_manifiesto", "carlos_9pm", "carlos_borrador")
+        )
         val finalStateCorrect = GameEngine.submitAccusation(state, "suspect_carlos", "clue_usb")
         assertEquals(GamePhase.VERDICT, finalStateCorrect.phase)
         val resultA = finalStateCorrect.gameResult

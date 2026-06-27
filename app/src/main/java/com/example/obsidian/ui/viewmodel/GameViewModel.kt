@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
@@ -71,6 +73,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
+    var selectedInterrogationSuspectId by mutableStateOf<String?>(null)
+        private set
+
+    private var interrogationTimerJob: Job? = null
+    private var activeInterrogationSuspectId: String? = null
+
     init { loadSavedCase() }
 
     private fun loadSavedCase() {
@@ -82,6 +90,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     _gameState.value = savedState
                     _messages.value = savedState.messages
                     _gameResult.value = savedState.gameResult
+                    savedState.interrogationSessions.entries
+                        .firstOrNull { it.value.isActive }
+                        ?.let { startInterrogationTimer(it.key) }
                 } else {
                     loadDefaultCase()
                 }
@@ -168,9 +179,77 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun selectInterrogationSuspect(suspectId: String) {
+        selectedInterrogationSuspectId = suspectId
+    }
+
     fun onQuestionSelected(suspect: Suspect, question: Question) {
         val newState = GameEngine.askQuestion(_gameState.value, suspect.id, question.id)
         updateGameState(newState)
+    }
+
+    fun startInterrogation(suspectId: String) {
+        stopInterrogationTimer()
+        val newState = GameEngine.startInterrogation(_gameState.value, suspectId)
+        updateGameState(newState)
+        activeInterrogationSuspectId = suspectId
+        startInterrogationTimer(suspectId)
+    }
+
+    fun endInterrogation(suspectId: String) {
+        stopInterrogationTimer()
+        val newState = GameEngine.endInterrogation(_gameState.value, suspectId)
+        updateGameState(newState)
+        activeInterrogationSuspectId = null
+    }
+
+    fun getQuestionsForRound(suspectId: String): List<Question> {
+        return GameEngine.getQuestionsForRound(_gameState.value, suspectId)
+    }
+
+    fun isInterrogationActive(suspectId: String): Boolean {
+        val session = _gameState.value.interrogationSessions[suspectId]
+        return session?.isActive == true
+    }
+
+    fun isInterrogationCompleted(suspectId: String): Boolean {
+        return suspectId in _gameState.value.interrogatedSuspects
+    }
+
+    fun getInterrogationSummary(suspectId: String): InterrogationSummary? {
+        return _gameState.value.interrogationSummaries[suspectId]
+    }
+
+    fun getInterrogationTimeRemaining(suspectId: String): Int {
+        return _gameState.value.interrogationSessions[suspectId]?.timeRemainingSeconds ?: 0
+    }
+
+    private fun startInterrogationTimer(suspectId: String) {
+        interrogationTimerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                val state = _gameState.value
+                val session = state.interrogationSessions[suspectId]
+                if (session == null || !session.isActive) break
+
+                val newState = if (session.timeRemainingSeconds <= 1) {
+                    GameEngine.handleTimeExpired(state, suspectId)
+                } else {
+                    GameEngine.tickInterrogationTime(state, suspectId)
+                }
+                updateGameState(newState)
+            }
+        }
+    }
+
+    private fun stopInterrogationTimer() {
+        interrogationTimerJob?.cancel()
+        interrogationTimerJob = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopInterrogationTimer()
     }
 
     fun sendMessage(suspect: Suspect, text: String) {
@@ -231,6 +310,21 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         
         _gameState.update { it.copy(messages = map) }
         saveGameState(_gameState.value)
+    }
+
+    fun confrontStatementWithClue(statementId: String, clueId: String) {
+        val newState = GameEngine.confrontStatementWithClue(_gameState.value, statementId, clueId)
+        updateGameState(newState)
+    }
+
+    fun compareStatements(statementId1: String, statementId2: String) {
+        val newState = GameEngine.compareStatements(_gameState.value, statementId1, statementId2)
+        updateGameState(newState)
+    }
+
+    fun pressSuspect(suspectId: String) {
+        val newState = GameEngine.pressSuspect(_gameState.value, suspectId)
+        updateGameState(newState)
     }
 
     fun submitAccusation(accusedId: String, keyEvidenceId: String) {

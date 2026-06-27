@@ -25,33 +25,75 @@ object CaseRepository {
                 availableQuestions = listOf(
                     Question(
                         id = "q_carlos_1",
-                        text = "¿Quién autorizó el despacho?",
+                        text = "Carlos, entiendo el estrés del cargo. ¿Recuerda quién autorizó el despacho de ese contenedor?",
                         effectType = "CONTRADICTION",
-                        effectValue = "su firma está en el manifiesto (dice no recordarlo)"
+                        effectValue = "su firma está en el manifiesto (dice no recordarlo)",
+                        coherence = 50,
+                        topic = "logística portuaria",
+                        approach = "EMPÁTICO"
                     ),
                     Question(
                         id = "q_carlos_2",
-                        text = "¿Conoce Logística del Caribe SAS?",
+                        text = "En los registros aparece Logística del Caribe SAS como filial. ¿Puede explicar su vínculo?",
                         effectType = "TRUST",
-                        effectValue = "-15"
+                        effectValue = "-15",
+                        coherence = 50,
+                        topic = "operaciones financieras",
+                        approach = "TÉCNICO"
                     ),
                     Question(
                         id = "q_carlos_3",
-                        text = "¿Dónde estaba a las 9 PM?",
+                        text = "Cuénteme sin prisa: ¿dónde estuvo exactamente a las 9 PM esa noche?",
                         effectType = "CONTRADICTION",
-                        effectValue = "su auto salió a las 9PM (dice que estaba en el almacén)"
+                        effectValue = "su auto salió a las 9PM (dice que estaba en el almacén)",
+                        coherence = 50,
+                        topic = "su coartada",
+                        approach = "EMPÁTICO"
                     ),
                     Question(
                         id = "q_carlos_4",
-                        text = "¿Relación con Don Aurelio fuera de la empresa?",
+                        text = "Sé que Don Aurelio era importante para usted. ¿Cómo era su relación fuera de la oficina?",
                         effectType = "UNLOCK_CLUE",
-                        effectValue = "clue_agenda"
+                        effectValue = "clue_agenda",
+                        coherence = 50,
+                        topic = "relaciones personales",
+                        approach = "EMPÁTICO"
                     ),
                     Question(
                         id = "q_carlos_5",
-                        text = "¿Conoce a Marisol personalmente?",
+                        text = "¿Conocía personalmente a Marisol Mendoza, la hija del fallecido?",
                         effectType = "TRUST",
-                        effectValue = "-20"
+                        effectValue = "-20",
+                        coherence = 50,
+                        topic = "relaciones personales",
+                        approach = "DIRECTO"
+                    ),
+                    Question(
+                        id = "q_carlos_7",
+                        text = "Respire, Carlos. No le acuso de nada aún. Cuénteme con calma qué hizo esa noche en el almacén.",
+                        effectType = "TRUST",
+                        effectValue = "10",
+                        coherence = 50,
+                        topic = "su coartada",
+                        approach = "EMPÁTICO"
+                    ),
+                    Question(
+                        id = "q_carlos_8",
+                        text = "¡Basta de evasivas! Su nombre aparece en cada documento sospechoso de este caso.",
+                        effectType = "TRUST",
+                        effectValue = "-25",
+                        coherence = 50,
+                        topic = "logística portuaria",
+                        approach = "PRESIÓN"
+                    ),
+                    Question(
+                        id = "q_carlos_9",
+                        text = "Repasemos el protocolo: ¿qué pasos siguió antes de cerrar el almacén esa noche?",
+                        effectType = "NONE",
+                        effectValue = "",
+                        coherence = 50,
+                        topic = "logística portuaria",
+                        approach = "TÉCNICO"
                     )
                 )
             ),
@@ -68,33 +110,66 @@ object CaseRepository {
                 availableQuestions = listOf(
                     Question(
                         id = "q_valentina_1",
-                        text = "Explique las transferencias de $180,000",
+                        text = "Según el libro mayor, hay transferencias por $180,000 sin respaldo. ¿Cuál fue el concepto contable?",
                         effectType = "TRUST",
-                        effectValue = "-10"
+                        effectValue = "-10",
+                        coherence = 50,
+                        topic = "transacciones sospechosas",
+                        approach = "TÉCNICO"
                     ),
                     Question(
                         id = "q_valentina_2",
-                        text = "¿Quién tramitó el seguro desde su PC?",
+                        text = "El log del sistema muestra que el seguro se tramitó desde su terminal. ¿Reconoce la sesión?",
                         effectType = "CONTRADICTION",
-                        effectValue = "el seguro fue tramitado desde su PC (dice que cualquiera pudo usarla)"
+                        effectValue = "el seguro fue tramitado desde su PC (dice que cualquiera pudo usarla)",
+                        coherence = 50,
+                        topic = "contabilidad",
+                        approach = "TÉCNICO"
                     ),
                     Question(
                         id = "q_valentina_3",
-                        text = "¿Quién es el cliente de la cena?",
+                        text = "¿Quién era el cliente con el que cenaba la noche del crimen?",
                         effectType = "TRUST",
-                        effectValue = "-15"
+                        effectValue = "-15",
+                        coherence = 50,
+                        topic = "su coartada",
+                        approach = "DIRECTO"
                     ),
                     Question(
                         id = "q_valentina_4",
-                        text = "¿Sabe qué es Logística del Caribe SAS?",
+                        text = "¿Qué operaciones contables vinculan a Importaciones Atlántico con Logística del Caribe SAS?",
                         effectType = "UNLOCK_CLUE",
-                        effectValue = "clue_bancos"
+                        effectValue = "clue_bancos",
+                        coherence = 50,
+                        topic = "conexiones empresariales",
+                        approach = "TÉCNICO"
                     ),
                     Question(
                         id = "q_valentina_5",
-                        text = "¿Sabía que Don Aurelio planeaba ver a un abogado?",
+                        text = "¿Registró en los libros que Don Aurelio tenía una cita con un abogado?",
                         effectType = "TRUST",
-                        effectValue = "5"
+                        effectValue = "5",
+                        coherence = 50,
+                        topic = "conexiones empresariales",
+                        approach = "DIRECTO"
+                    ),
+                    Question(
+                        id = "q_valentina_7",
+                        text = "Señora Ríos, debe ser terrible perder a su jefe así. Cuénteme lo que recuerde.",
+                        effectType = "TRUST",
+                        effectValue = "-5",
+                        coherence = 50,
+                        topic = "contabilidad",
+                        approach = "EMPÁTICO"
+                    ),
+                    Question(
+                        id = "q_valentina_8",
+                        text = "¡No me mienta! Los números no mienten y usted firmó cada transferencia.",
+                        effectType = "TRUST",
+                        effectValue = "-20",
+                        coherence = 50,
+                        topic = "transacciones sospechosas",
+                        approach = "PRESIÓN"
                     )
                 )
             ),
@@ -111,33 +186,66 @@ object CaseRepository {
                 availableQuestions = listOf(
                     Question(
                         id = "q_tomas_1",
-                        text = "¿Por qué no hay registro de inspección?",
+                        text = "El formulario 7-BETA no tiene sello de inspección. ¿Qué ocurrió con el procedimiento?",
                         effectType = "TRUST",
-                        effectValue = "-20"
+                        effectValue = "-20",
+                        coherence = 50,
+                        topic = "procedimientos aduaneros",
+                        approach = "TÉCNICO"
                     ),
                     Question(
                         id = "q_tomas_2",
-                        text = "¿Conoce a Carlos Herrera personalmente?",
+                        text = "Dígame directamente: ¿conoce a Carlos Herrera, jefe de logística?",
                         effectType = "CONTRADICTION",
-                        effectValue = "dice no conocer a Carlos Herrera pero hay fotos de ambos"
+                        effectValue = "dice no conocer a Carlos Herrera pero hay fotos de ambos",
+                        coherence = 50,
+                        topic = "relaciones con logística",
+                        approach = "DIRECTO"
                     ),
                     Question(
                         id = "q_tomas_3",
-                        text = "Explique los depósitos en su cuenta",
+                        text = "Los extractos muestran depósitos inusuales en su cuenta. Explíqueme el origen.",
                         effectType = "TRUST",
-                        effectValue = "-25"
+                        effectValue = "-25",
+                        coherence = 50,
+                        topic = "movimientos bancarios",
+                        approach = "DIRECTO"
                     ),
                     Question(
                         id = "q_tomas_4",
-                        text = "Tenemos video de usted liberando el contenedor",
+                        text = "Tenemos CCTV donde usted libera el contenedor sin inspeccionarlo. ¿Qué pasó?",
                         effectType = "UNLOCK_CLUE",
-                        effectValue = "clue_camara"
+                        effectValue = "clue_camara",
+                        coherence = 50,
+                        topic = "inspecciones",
+                        approach = "DIRECTO"
                     ),
                     Question(
                         id = "q_tomas_5",
-                        text = "¿Alguien le pidió ignorar ese contenedor?",
+                        text = "¿Recibió instrucciones de alguien para ignorar ese contenedor específico?",
                         effectType = "CONTRADICTION",
-                        effectValue = "slip: 'nadie me dijo que ignorara ESE'"
+                        effectValue = "slip: 'nadie me dijo que ignorara ESE'",
+                        coherence = 50,
+                        topic = "procedimientos aduaneros",
+                        approach = "DIRECTO"
+                    ),
+                    Question(
+                        id = "q_tomas_6",
+                        text = "Inspector, debe ser difícil bajo tanta presión. Si algo salió mal, puede confiarme.",
+                        effectType = "TRUST",
+                        effectValue = "5",
+                        coherence = 50,
+                        topic = "procedimientos aduaneros",
+                        approach = "EMPÁTICO"
+                    ),
+                    Question(
+                        id = "q_tomas_7",
+                        text = "¡Usted sabe quién organizó esto! Deje de proteger a los culpables.",
+                        effectType = "TRUST",
+                        effectValue = "-30",
+                        coherence = 50,
+                        topic = "relaciones con logística",
+                        approach = "PRESIÓN"
                     )
                 )
             ),
@@ -154,33 +262,66 @@ object CaseRepository {
                 availableQuestions = listOf(
                     Question(
                         id = "q_marisol_1",
-                        text = "¿Sabía su padre que la empresa tenía problemas?",
+                        text = "Lamento profundamente su pérdida. ¿Su padre le había hablado de problemas en la empresa?",
                         effectType = "TRUST",
-                        effectValue = "10"
+                        effectValue = "10",
+                        coherence = 50,
+                        topic = "su padre",
+                        approach = "EMPÁTICO"
                     ),
                     Question(
                         id = "q_marisol_2",
-                        text = "¿Conoce a Carlos fuera del trabajo?",
+                        text = "¿Tenía alguna relación con Carlos Herrera fuera del ámbito laboral?",
                         effectType = "CONTRADICTION",
-                        effectValue = "dice no conocer a Carlos pero hay fotos juntos"
+                        effectValue = "dice no conocer a Carlos pero hay fotos juntos",
+                        coherence = 50,
+                        topic = "relaciones con empleados",
+                        approach = "DIRECTO"
                     ),
                     Question(
                         id = "q_marisol_3",
-                        text = "¿Por qué contactó al abogado tan pronto?",
+                        text = "Comprendo que es un momento difícil. ¿Por qué contactó al abogado tan pronto?",
                         effectType = "TRUST",
-                        effectValue = "-10"
+                        effectValue = "-10",
+                        coherence = 50,
+                        topic = "herencia y patrimonio",
+                        approach = "EMPÁTICO"
                     ),
                     Question(
                         id = "q_marisol_4",
-                        text = "¿Su padre le mencionó tener miedo de alguien?",
+                        text = "Marisol, sé que esto duele. ¿Su padre le dijo que temía por su vida?",
                         effectType = "UNLOCK_CLUE",
-                        effectValue = "clue_agenda"
+                        effectValue = "clue_agenda",
+                        coherence = 50,
+                        topic = "su padre",
+                        approach = "EMPÁTICO"
                     ),
                     Question(
                         id = "q_marisol_5",
-                        text = "¿Qué son las ganancias operativas especiales?",
+                        text = "¿Qué significan las 'ganancias operativas especiales' en los documentos?",
                         effectType = "TRUST",
-                        effectValue = "-30"
+                        effectValue = "-30",
+                        coherence = 50,
+                        topic = "acuerdos privados",
+                        approach = "DIRECTO"
+                    ),
+                    Question(
+                        id = "q_marisol_6",
+                        text = "Estoy aquí para encontrar quién le hizo esto a su padre. Confíe en mí.",
+                        effectType = "TRUST",
+                        effectValue = "15",
+                        coherence = 50,
+                        topic = "su padre",
+                        approach = "EMPÁTICO"
+                    ),
+                    Question(
+                        id = "q_marisol_7",
+                        text = "¡Deje de ocultar información! Su padre murió y usted sabe más de lo que dice.",
+                        effectType = "TRUST",
+                        effectValue = "-25",
+                        coherence = 50,
+                        topic = "herencia y patrimonio",
+                        approach = "PRESIÓN"
                     )
                 )
             )
