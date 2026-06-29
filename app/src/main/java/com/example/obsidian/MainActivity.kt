@@ -24,6 +24,20 @@ import com.example.obsidian.ui.components.CyberBottomBar
 import com.example.obsidian.ui.theme.ObsidianTheme
 import com.example.obsidian.ui.viewmodel.GameViewModel
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,6 +87,57 @@ private fun AppRoot() {
             modifier = Modifier.padding(innerPadding), 
             navController = navController,
             viewModel = gameViewModel
+        )
+    }
+
+    // Alerta de Pista Desbloqueada Global
+    val unlockedClue by gameViewModel.unlockedClueAlert.collectAsStateWithLifecycle()
+    unlockedClue?.let { clue ->
+        AlertDialog(
+            onDismissRequest = { gameViewModel.clearUnlockedClueAlert() },
+            title = {
+                Text(
+                    text = "🚨 NUEVA PISTA DESBLOQUEADA 🚨",
+                    color = Color(0xFFFFD700), // Amarillo Neón/Oro
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = clue.title,
+                        color = Color.White,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 15.sp,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    Text(
+                        text = clue.description,
+                        color = Color.LightGray,
+                        fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Ubicación: ${clue.locationName}",
+                        color = Color(0xFF00FFFF), // Cian Neón
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { gameViewModel.clearUnlockedClueAlert() }
+                ) {
+                    Text("ENTENDIDO", color = Color(0xFFFFD700), fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = Color(0xFF0D0E11),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.border(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
         )
     }
 }
