@@ -131,8 +131,9 @@ fun MapScreen(
             }
         }
         if (pinId == "Fiscalía") {
-            if (state.explorationCount < 3) {
-                return PinLockStatus.Locked("El sistema financiero de la fiscalía requiere al menos 3 exploraciones previas en la barra de progreso.")
+            val banksAvailable = state.currentCase?.clues?.find { it.id == "clue_bancos" }?.isAvailable == true
+            if (state.explorationCount < 2 && !banksAvailable) {
+                return PinLockStatus.Locked("El sistema financiero de la fiscalía requiere al menos 2 exploraciones previas o haber habilitado los Registros Bancarios interrogando a Carlos.")
             }
         }
         if (pinId == "Estudio de Abogados") {

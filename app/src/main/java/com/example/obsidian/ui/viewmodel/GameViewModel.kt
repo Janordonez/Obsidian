@@ -179,13 +179,239 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    var activeSpecialMoment by mutableStateOf<SpecialMoment?>(null)
+
     fun selectInterrogationSuspect(suspectId: String) {
         selectedInterrogationSuspectId = suspectId
     }
 
     fun onQuestionSelected(suspect: Suspect, question: Question) {
-        val newState = GameEngine.askQuestion(_gameState.value, suspect.id, question.id)
-        updateGameState(newState)
+        // Intercept key questions to trigger Special Moments
+        val hasTriggered = triggerSpecialMomentIfNeeded(suspect, question)
+        if (hasTriggered) return
+
+        executeQuestionNormally(suspect, question)
+    }
+
+    private fun triggerSpecialMomentIfNeeded(suspect: Suspect, question: Question): Boolean {
+        when (question.id) {
+            "q_carlos_3" -> {
+                activeSpecialMoment = SpecialMoment.ReconstructConversation(
+                    suspectId = suspect.id,
+                    questionId = question.id,
+                    correctSequence = listOf(
+                        "Salí de mi oficina privada en Barranquilla a las 7:45 PM.",
+                        "En el trayecto llamé por teléfono al inspector Tomás a las 8:10 PM.",
+                        "Llegué a la gasolinera del puerto a las 8:35 PM a comprar un café.",
+                        "Aparqué el vehículo a las 8:50 PM en la zona de carga.",
+                        "Finalmente ingresé al almacén principal a las 9:00 PM."
+                    ),
+                    scrambledSequence = listOf(
+                        "Aparqué el vehículo a las 8:50 PM en la zona de carga.",
+                        "Salí de mi oficina privada en Barranquilla a las 7:45 PM.",
+                        "Finalmente ingresé al almacén principal a las 9:00 PM.",
+                        "En el trayecto llamé por teléfono al inspector Tomás a las 8:10 PM.",
+                        "Llegué a la gasolinera del puerto a las 8:35 PM a comprar un café."
+                    ),
+                    rewardText = "CCTV del Puerto (clue_camara) y contradicción: Alibi de las 9 PM",
+                    clueIdToUnlock = "clue_camara",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "carlos_9pm", "clue_camara")
+                    }
+                )
+                return true
+            }
+            "q_tomas_4" -> {
+                activeSpecialMoment = SpecialMoment.ReconstructConversation(
+                    suspectId = suspect.id,
+                    questionId = question.id,
+                    correctSequence = listOf(
+                        "Inicié mi turno en la caseta de control a las 8:00 PM.",
+                        "Recibí la llamada de Carlos Herrera a las 8:10 PM para coordinar la inspección.",
+                        "Visualicé el contenedor 7-BETA aproximarse a la barrera a las 8:40 PM.",
+                        "Validé los manifiestos de importación en el sistema a las 8:45 PM.",
+                        "Finalmente levanté la barrera a las 8:48 PM permitiendo el paso."
+                    ),
+                    scrambledSequence = listOf(
+                        "Validé los manifiestos de importación en el sistema a las 8:45 PM.",
+                        "Inicié mi turno en la caseta de control a las 8:00 PM.",
+                        "Finalmente levanté la barrera a las 8:48 PM permitiendo el paso.",
+                        "Recibí la llamada de Carlos Herrera a las 8:10 PM para coordinar la inspección.",
+                        "Visualicé el contenedor 7-BETA aproximarse a la barrera a las 8:40 PM."
+                    ),
+                    rewardText = "USB con Correos (clue_usb) y contradicción: Cámaras del Puerto",
+                    clueIdToUnlock = "clue_usb",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "tomas_camara", "clue_usb")
+                    }
+                )
+                return true
+            }
+            "q_carlos_4" -> {
+                activeSpecialMoment = SpecialMoment.RememberDetails(
+                    questionText = "¿Cuál era la clave exacta y en qué página de la libreta de cuero marrón anotaba las transacciones Don Aurelio según el relato?",
+                    options = listOf(
+                        "Clave 'ALT-800' en la página 15",
+                        "Clave 'ATL-800' en la página 12",
+                        "Clave 'ALT-18' en la página 15",
+                        "Clave 'ATL-800' en la página 15"
+                    ),
+                    correctOption = "Clave 'ALT-800' en la página 15",
+                    contextStatement = "Don Aurelio siempre llevaba una corbata verde botella, escribía con un bolígrafo de tinta dorada, y registraba cada transacción en su libreta de cuero marrón bajo la clave 'ALT-800' en la página 15.",
+                    rewardText = "Agenda Mendoza (clue_agenda)",
+                    clueIdToUnlock = "clue_agenda",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "clue_agenda", "clue_agenda")
+                    }
+                )
+                return true
+            }
+            "q_valentina_2" -> {
+                activeSpecialMoment = SpecialMoment.RememberDetails(
+                    questionText = "¿Cuál es el identificador de la terminal remota y la hora exacta de ingreso de la póliza 402-B según Valentina?",
+                    options = listOf(
+                        "Terminal 'TERM-9' a las 5:45 PM",
+                        "Terminal 'TERM-4' a las 5:45 PM",
+                        "Terminal 'TERM-9' a las 4:02 PM",
+                        "Terminal 'TERM-2' a las 5:45 PM"
+                    ),
+                    correctOption = "Terminal 'TERM-9' a las 5:45 PM",
+                    contextStatement = "El seguro marítimo internacional se contrató por un valor de $180,000 bajo la póliza aduanera número 402-B, ingresada por la terminal remota 'TERM-9' a las 5:45 PM.",
+                    rewardText = "Registros Bancarios (clue_bancos) y contradicción: Seguro del Contenedor",
+                    clueIdToUnlock = "clue_bancos",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "valentina_seguro", "clue_bancos")
+                    }
+                )
+                return true
+            }
+            "q_marisol_2" -> {
+                activeSpecialMoment = SpecialMoment.RememberDetails(
+                    questionText = "¿En qué número de mesa se sentó Marisol y quiénes eran sus acompañantes según su testimonio?",
+                    options = listOf(
+                        "Mesa 4, doctor Restrepo y coronel Vargas",
+                        "Mesa 7, doctor Restrepo y coronel Vargas",
+                        "Mesa 4, doctor Restrepo y Carlos Herrera",
+                        "Mesa 4, doctor Vargas y coronel Restrepo"
+                    ),
+                    correctOption = "Mesa 4, doctor Restrepo y coronel Vargas",
+                    contextStatement = "Yo asistí a la cena benéfica del Club Campestre desde las 7:30 hasta las 11:15 de la noche, y me senté en la mesa 4 junto al doctor Restrepo y el coronel Vargas.",
+                    rewardText = "Contrato de Ganancias (clue_contrato) y contradicción: Relación Carlos-Marisol",
+                    clueIdToUnlock = "clue_contrato",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "carlos_marisol_relation", "clue_contrato")
+                    }
+                )
+                return true
+            }
+            "q_tomas_2" -> {
+                activeSpecialMoment = SpecialMoment.PsychologicalProfile(
+                    suspectId = suspect.id,
+                    questionText = "Tomás evita contacto visual directo, repite constantemente que 'solo seguía protocolos', y sus manos tiemblan visiblemente al sujetar el registro de aduanas. ¿Cuál es el diagnóstico lógico de su perfil?",
+                    options = listOf(
+                        "Defensivo con signos de pánico/culpabilidad",
+                        "Mano firme y actitud colaborativa",
+                        "Completamente indiferente y relajado",
+                        "Altivo y seguro de su inocencia"
+                    ),
+                    correctOption = "Defensivo con signos de pánico/culpabilidad",
+                    rewardText = "CCTV del Puerto (clue_camara) y contradicción: Relación Tomás-Carlos",
+                    clueIdToUnlock = "clue_camara",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "tomas_carlos", "clue_camara")
+                    }
+                )
+                return true
+            }
+            "q_valentina_4" -> {
+                activeSpecialMoment = SpecialMoment.PsychologicalProfile(
+                    suspectId = suspect.id,
+                    questionText = "Valentina responde con tono monótono, sonríe de forma fingida ante la mención de las cuentas fantasmas, y cita artículos exactos del código tributario para justificar los desvíos. ¿Qué rasgo describe su perfil?",
+                    options = listOf(
+                        "Calculadora y fría con actitud evasiva",
+                        "Angustiada y asustada con ganas de cooperar",
+                        "Confundida y despistada sobre finanzas",
+                        "Irritada y agresiva con la autoridad"
+                    ),
+                    correctOption = "Calculadora y fría con actitud evasiva",
+                    rewardText = "Registros Bancarios (clue_bancos) y contradicción: Relación Valentina-Carlos",
+                    clueIdToUnlock = "clue_bancos",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "carlos_valentina_relation", "clue_bancos")
+                    }
+                )
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun resolveSpecialMoment(suspect: Suspect, question: Question, success: Boolean, effectValue: String, clueIdToUnlock: String?) {
+        activeSpecialMoment = null
+        if (success) {
+            // Success: Unlock promised clue first
+            if (clueIdToUnlock != null) {
+                val stateWithClue = GameEngine.unlockAndDiscoverClue(_gameState.value, clueIdToUnlock)
+                updateGameState(stateWithClue)
+            }
+            // Then execute normal question response
+            executeQuestionNormally(suspect, question)
+        } else {
+            // Failure: Deduct trust and append warning message
+            val currentMsgs = _gameState.value.messages[suspect.id] ?: emptyList()
+            val failMsg = InterrogationMessage(
+                sender = "SISTEMA",
+                text = "❌ FALLO EN EL MOMENTO ESPECIAL: El sospechoso detectó tus dudas y se cierra. (-15 Confianza)",
+                isDetective = false,
+                time = getCurrentTime()
+            )
+            val updatedSuspects = (_gameState.value.currentCase?.suspects ?: emptyList()).map {
+                if (it.id == suspect.id) {
+                    it.copy(trustLevel = (it.trustLevel - 15).coerceIn(0, 100))
+                } else it
+            }
+            val newState = _gameState.value.copy(
+                currentCase = _gameState.value.currentCase?.copy(suspects = updatedSuspects),
+                messages = _gameState.value.messages + (suspect.id to (currentMsgs + failMsg))
+            )
+            updateGameState(newState)
+        }
+    }
+
+    private fun executeQuestionNormally(suspect: Suspect, question: Question) {
+        viewModelScope.launch {
+            isGenerating = true
+            try {
+                val discoveredClueIds = _gameState.value.discoveredClues.map { it.id }
+                val response = geminiService.getDynamicInterrogationResponse(
+                    suspectId = suspect.id,
+                    questionId = question.id,
+                    trustLevel = suspect.trustLevel,
+                    discoveredClueIds = discoveredClueIds
+                )
+                if (response != null) {
+                    val newState = GameEngine.applyDynamicQuestionResponse(
+                        state = _gameState.value,
+                        suspectId = suspect.id,
+                        questionId = question.id,
+                        dialog = response.dialog,
+                        effectType = response.effect.type,
+                        effectValue = response.effect.value,
+                        narratorNote = response.narratorNote
+                    )
+                    updateGameState(newState)
+                } else {
+                    val newState = GameEngine.askQuestion(_gameState.value, suspect.id, question.id)
+                    updateGameState(newState)
+                }
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error in dynamic interrogation", e)
+                val newState = GameEngine.askQuestion(_gameState.value, suspect.id, question.id)
+                updateGameState(newState)
+            } finally {
+                isGenerating = false
+            }
+        }
     }
 
     fun startInterrogation(suspectId: String) {
@@ -327,6 +553,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         updateGameState(newState)
     }
 
+    fun forceCooperation(suspectId: String) {
+        val newState = GameEngine.forceCooperation(_gameState.value, suspectId)
+        updateGameState(newState)
+    }
+
     fun submitAccusation(accusedId: String, keyEvidenceId: String) {
         isSubmittingAccusation = true
         val updatedState = GameEngine.submitAccusation(_gameState.value, accusedId, keyEvidenceId)
@@ -362,4 +593,39 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun getCurrentTime() = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+}
+
+sealed class SpecialMoment {
+    abstract val rewardText: String
+    abstract val clueIdToUnlock: String?
+
+    data class ReconstructConversation(
+        val suspectId: String,
+        val questionId: String,
+        val correctSequence: List<String>,
+        val scrambledSequence: List<String>,
+        override val rewardText: String,
+        override val clueIdToUnlock: String?,
+        val onComplete: (Boolean) -> Unit
+    ) : SpecialMoment()
+
+    data class RememberDetails(
+        val questionText: String,
+        val options: List<String>,
+        val correctOption: String,
+        val contextStatement: String,
+        override val rewardText: String,
+        override val clueIdToUnlock: String?,
+        val onComplete: (Boolean) -> Unit
+    ) : SpecialMoment()
+
+    data class PsychologicalProfile(
+        val suspectId: String,
+        val questionText: String,
+        val options: List<String>,
+        val correctOption: String,
+        override val rewardText: String,
+        override val clueIdToUnlock: String?,
+        val onComplete: (Boolean) -> Unit
+    ) : SpecialMoment()
 }
