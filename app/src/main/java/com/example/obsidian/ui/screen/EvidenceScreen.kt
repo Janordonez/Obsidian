@@ -1,16 +1,17 @@
 package com.example.obsidian.ui.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,16 +19,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.example.obsidian.navigation.Screen
-import com.example.obsidian.ui.theme.BackgroundNoir
-import com.example.obsidian.ui.theme.CyanNeon
-import com.example.obsidian.ui.theme.neonYellow
-import com.example.obsidian.ui.theme.SurfaceDark
-import com.example.obsidian.ui.theme.AggressiveRed
+import com.example.obsidian.data.model.Clue
+import com.example.obsidian.ui.theme.*
 import com.example.obsidian.ui.viewmodel.GameViewModel
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.font.FontFamily
 
 @Composable
 fun EvidenceScreen(
@@ -35,27 +36,58 @@ fun EvidenceScreen(
     viewModel: GameViewModel,
     modifier: Modifier = Modifier
 ) {
-    val gameCase by viewModel.currentCase.collectAsStateWithLifecycle()
-    val deductionAnalysis by viewModel.deductionAnalysis.collectAsStateWithLifecycle()
-    val isAnalyzing = viewModel.isAnalyzing
+    val gameState by viewModel.gameState.collectAsStateWithLifecycle()
+    val selectedClues by viewModel.selectedClues.collectAsStateWithLifecycle()
+    val deductionResult by viewModel.deductionResult.collectAsStateWithLifecycle()
 
-    val suspects = gameCase?.suspects ?: emptyList()
-    val clues = gameCase?.clues ?: emptyList()
+    val clues = gameState.currentCase?.clues?.filter { it.isFound } ?: emptyList()
+    var selectedClueDetail by remember { mutableStateOf<Clue?>(null) }
 
-    val clueAssignments by viewModel.clueAssignments.collectAsStateWithLifecycle()
-    var selectedClue by remember { mutableStateOf<String?>(null) }
-
-    fun assignClueToSuspect(suspectName: String) {
-        val clueTitle = selectedClue ?: return
-        viewModel.assignClueToSuspect(suspectName, clueTitle)
-        selectedClue = null
-    }
-
-    val scrollState = rememberScrollState()
-
-    if (gameCase == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No hay expediente activo", color = Color.Gray)
+    // Bloqueo de Tablero: Se necesitan al menos 2 sospechosos interrogados
+    if (gameState.interrogatedSuspects.size < 2) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(BackgroundNoir)
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Psychology,
+                    contentDescription = null,
+                    tint = CyanNeon,
+                    modifier = Modifier.size(64.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "TABLERO DE EVIDENCIAS BLOQUEADA",
+                    color = CyanNeon,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Debes terminar de interrogar a al menos 2 sospechosos antes de analizar y relacionar las evidencias en el tablero.",
+                    color = Color.LightGray,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = { navController.navigate(com.example.obsidian.navigation.Screen.Interrogation.route) },
+                    colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("IR A INTERROGATORIOS", fontWeight = FontWeight.Bold)
+                }
+            }
         }
         return
     }
@@ -63,214 +95,229 @@ fun EvidenceScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF050816), Color(0xFF000000))
-                )
-            )
-            .verticalScroll(scrollState)
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(BackgroundNoir)
+            .padding(16.dp)
     ) {
-        Text(
-            text = "EVIDENCE BOARD",
-            color = neonYellow,
-            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.ExtraBold)
-        )
-
-        Text(
-            text = "Connect clues. Expose contradictions.",
-            color = CyanNeon,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium)
-        )
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = BackgroundNoir),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = CyanNeon,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "AVAILABLE CLUES",
-                        color = CyanNeon,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                }
-
+            Column {
                 Text(
-                    text = "Select one clue, then tap a suspect card to assign it.",
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium
+                    text = "EVIDENCE BOARD",
+                    color = neonYellow,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Black
                 )
+                Text(
+                    text = "Conecta pistas y vincula sospechosos",
+                    color = CyanNeon,
+                    fontSize = 12.sp
+                )
+            }
 
-                clues.forEach { clue ->
-                    val isSelected = clue.title == selectedClue
-                    Button(
-                        onClick = { selectedClue = clue.title },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isSelected) neonYellow else SurfaceDark,
-                            contentColor = if (isSelected) Color.Black else Color.White
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = if (isSelected) Color.Black else neonYellow
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = clue.title)
-                        }
-                    }
+            // Si hay al menos 3 pistas vinculadas, muestra el botón para presentar cargos
+            if (gameState.clueAssignments.size >= 3) {
+                Button(
+                    onClick = { navController.navigate(com.example.obsidian.navigation.Screen.Accusation.route) },
+                    colors = ButtonDefaults.buttonColors(containerColor = AggressiveRed, contentColor = Color.White),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text("CARGOS", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = BackgroundNoir),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Grid de Evidencias
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            items(clues) { clue ->
+                val assignedSuspectId = gameState.clueAssignments[clue.id]
+                val assignedSuspectName = gameState.currentCase?.suspects?.find { it.id == assignedSuspectId }?.name
+                ClueCard(
+                    clue = clue,
+                    isSelected = selectedClues.contains(clue.id),
+                    assignedSuspectName = assignedSuspectName,
+                    onToggle = { selectedClueDetail = clue }
+                )
+            }
+        }
+
+        // Feedback de Deducción
+        if (deductionResult != null) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (deductionResult!!.isValid) Color(0xFF001A1A) else Color(0xFF1A0000)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+                    .border(1.dp, if (deductionResult!!.isValid) CyanNeon else AggressiveRed, RoundedCornerShape(8.dp))
             ) {
                 Text(
-                    text = "SUSPECT FILES",
-                    color = neonYellow,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    text = deductionResult!!.message,
+                    color = if (deductionResult!!.isValid) CyanNeon else Color.White,
+                    modifier = Modifier.padding(12.dp),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
                 )
+            }
+        }
 
-                suspects.forEach { suspect ->
-                    val assignedClues = clueAssignments[suspect.name].orEmpty()
+        // Botón de Deducción
+        Button(
+            onClick = { viewModel.evaluateDeduction() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black),
+            shape = RoundedCornerShape(8.dp),
+            enabled = selectedClues.size >= 2
+        ) {
+            Icon(Icons.Default.Psychology, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("EVALUAR DEDUCCIÓN COGNITIVA", fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+    }
 
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                assignClueToSuspect(suspect.name)
-                            }
+    // Diálogo de Detalle y Vinculación de Pistas
+    selectedClueDetail?.let { clue ->
+        val assignedSuspectId = gameState.clueAssignments[clue.id]
+        AlertDialog(
+            onDismissRequest = { selectedClueDetail = null },
+            title = {
+                Text(clue.title.uppercase(), color = CyanNeon, fontWeight = FontWeight.Black, fontSize = 16.sp)
+            },
+            text = {
+                Column {
+                    Text(text = clue.description, color = Color.White, fontSize = 13.sp, lineHeight = 18.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            viewModel.toggleClueSelection(clue.id)
+                        }
                     ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = CyanNeon,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
+                        Checkbox(
+                            checked = selectedClues.contains(clue.id),
+                            onCheckedChange = { viewModel.toggleClueSelection(clue.id) },
+                            colors = CheckboxDefaults.colors(checkedColor = CyanNeon)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Seleccionar para análisis de conexión", color = Color.LightGray, fontSize = 12.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("VINCULAR SOSPECHOSO:", color = neonYellow, fontWeight = FontWeight.Bold, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        gameState.currentCase?.suspects?.forEach { suspect ->
+                            val isLinked = assignedSuspectId == suspect.id
+                            Surface(
+                                onClick = {
+                                    viewModel.linkClueToSuspect(clue.id, suspect.id)
+                                    selectedClueDetail = null
+                                },
+                                color = if (isLinked) CyanNeon.copy(alpha = 0.15f) else Color.Black,
+                                border = BorderStroke(1.dp, if (isLinked) CyanNeon else Color.DarkGray),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Text(
                                     text = suspect.name,
                                     color = Color.White,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
-
+                        }
+                        // Desvincular
+                        Surface(
+                            onClick = {
+                                viewModel.linkClueToSuspect(clue.id, null)
+                                selectedClueDetail = null
+                            },
+                            color = Color.Transparent,
+                            border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Text(
-                                text = if (assignedClues.isEmpty()) {
-                                    "Assigned clues: none"
-                                } else {
-                                    "Assigned clues: ${assignedClues.joinToString(", ")}"
-                                },
-                                color = if (assignedClues.isEmpty()) Color(0xFF8B96A8) else CyanNeon,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-
-                            Text(
-                                text = if (selectedClue == null) {
-                                    "Tap a clue first, then tap this suspect to assign it."
-                                } else {
-                                    "Tap to assign: ${selectedClue ?: ""}"
-                                },
-                                color = neonYellow.copy(alpha = 0.8f),
-                                style = MaterialTheme.typography.bodySmall
+                                text = "DESVINCULAR PISTA",
+                                color = Color.Gray,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
                 }
-            }
-        }
-
-        // Analyze deduction button
-        Button(
-            onClick = {
-                viewModel.analyzeDeductions(clueAssignments)
             },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isAnalyzing && clueAssignments.values.any { it.isNotEmpty() },
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = neonYellow,
-                contentColor = Color.Black
-            )
-        ) {
-            if (isAnalyzing) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.Black)
-            } else {
-                Icon(imageVector = Icons.Default.Check, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "ANALYZE DEDUCTION", fontWeight = FontWeight.Bold)
-            }
-        }
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { selectedClueDetail = null }) {
+                    Text("CERRAR", color = Color.Gray)
+                }
+            },
+            containerColor = Color(0xFF0D0E11),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.border(1.dp, CyanNeon.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+        )
+    }
+}
 
-        if (deductionAnalysis.isNotBlank()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = BackgroundNoir),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+@Composable
+fun ClueCard(clue: Clue, isSelected: Boolean, assignedSuspectName: String?, onToggle: () -> Unit) {
+    Surface(
+        onClick = onToggle,
+        color = if (isSelected) CyanNeon.copy(alpha = 0.1f) else Color.Black,
+        border = BorderStroke(1.dp, if (isSelected) CyanNeon else Color.DarkGray),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth().aspectRatio(1.2f)
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = if (isSelected) Icons.Default.Check else Icons.Default.Search,
+                contentDescription = null,
+                tint = if (isSelected) CyanNeon else Color.Gray,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = clue.title,
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                lineHeight = 14.sp
+            )
+            if (assignedSuspectName != null) {
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = deductionAnalysis,
-                    color = CyanNeon,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                    modifier = Modifier.padding(16.dp)
+                    text = "📎 ${assignedSuspectName.split(" ").first()}",
+                    color = neonYellow,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace
                 )
             }
         }
-
-        // Accusation navigation button
-        val allCluesAssigned = viewModel.allCluesAssigned()
-        Button(
-            onClick = {
-                navController.navigate(Screen.Accusation.route)
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = allCluesAssigned,
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = AggressiveRed,
-                contentColor = Color.White,
-                disabledContainerColor = Color.DarkGray,
-                disabledContentColor = Color.Gray
-            )
-        ) {
-            Icon(imageVector = Icons.Default.Warning, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "PRESENTAR ACUSACIÓN →", fontWeight = FontWeight.Bold)
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
     }
 }

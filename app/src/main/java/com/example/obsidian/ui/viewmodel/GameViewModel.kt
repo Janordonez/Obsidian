@@ -3,369 +3,629 @@ package com.example.obsidian.ui.viewmodel
 import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.obsidian.BuildConfig
-import com.example.obsidian.R
-import com.example.obsidian.data.model.AISuspect
-import com.example.obsidian.data.model.GameCase
-import com.example.obsidian.data.model.GameResult
-import com.example.obsidian.data.model.InterrogationMessage
+import com.example.obsidian.data.model.*
+import com.example.obsidian.data.local.*
 import com.example.obsidian.data.remote.GeminiService
+import com.example.obsidian.data.remote.GroqService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import android.util.Log
-import com.example.obsidian.data.remote.GroqService
 
 class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val geminiService = GeminiService(BuildConfig.GEMINI_API_KEY)
     private val groqService = GroqService(BuildConfig.GROQ_API_KEY)
     private val sharedPrefs = application.getSharedPreferences("obsidian_prefs", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
+    private val db = AppDatabase.getDatabase(application)
+    private val gameSaveDao = db.gameSaveDao()
     
-    private val _currentCase = MutableStateFlow<GameCase?>(null)
-    val currentCase = _currentCase.asStateFlow()
+    private val _gameState = MutableStateFlow(GameState())
+    val gameState = _gameState.asStateFlow()
 
     private val _messages = MutableStateFlow<Map<String, List<InterrogationMessage>>>(emptyMap())
     val messages = _messages.asStateFlow()
 
-    var isGenerating by mutableStateOf(false)
-        private set
+    private val _selectedClues = MutableStateFlow<Set<String>>(emptySet())
+    val selectedClues = _selectedClues.asStateFlow()
 
-    var errorMessage by mutableStateOf<String?>(null)
-        private set
+    private val _deductionResult = MutableStateFlow<DeductionResult?>(null)
+    val deductionResult = _deductionResult.asStateFlow()
 
-    // Clue assignments state
-    private val _clueAssignments = MutableStateFlow<Map<String, List<String>>>(emptyMap())
-    val clueAssignments = _clueAssignments.asStateFlow()
-
-    // Game result state
     private val _gameResult = MutableStateFlow<GameResult?>(null)
     val gameResult = _gameResult.asStateFlow()
 
-    private val _deductionAnalysis = MutableStateFlow("")
-    val deductionAnalysis = _deductionAnalysis.asStateFlow()
+    private val _unlockedClueAlert = MutableStateFlow<Clue?>(null)
+    val unlockedClueAlert = _unlockedClueAlert.asStateFlow()
 
-    var isAnalyzing by mutableStateOf(false)
+    fun clearUnlockedClueAlert() {
+        _unlockedClueAlert.value = null
+    }
+
+    // Configuración de Audio
+    var isEffectsEnabled by mutableStateOf(sharedPrefs.getBoolean("effects_enabled", true))
+    var effectsVolume by mutableFloatStateOf(sharedPrefs.getFloat("effects_volume", 0.7f))
+    var isMusicEnabled by mutableStateOf(sharedPrefs.getBoolean("music_enabled", true))
+    var musicVolume by mutableFloatStateOf(sharedPrefs.getFloat("music_volume", 0.5f))
+
+    var isGenerating by mutableStateOf(false)
         private set
 
     var isSubmittingAccusation by mutableStateOf(false)
         private set
 
-    // Audio Settings
-    var musicVolume by mutableStateOf(0.7f)
-    var effectsVolume by mutableStateOf(0.8f)
-    var isMusicEnabled by mutableStateOf(true)
-    var isEffectsEnabled by mutableStateOf(true)
+    var errorMessage by mutableStateOf<String?>(null)
+        private set
 
-    private val maleImages = listOf(
-        R.drawable.sus1,
-        R.drawable.sus3,
-        R.drawable.malesus1,
-        R.drawable.malesus2,
-        R.drawable.malesus3,
-        R.drawable.malesus4
-    )
-    private val femaleImages = listOf(
-        R.drawable.susfemale1,
-        R.drawable.susfemale2,
-        R.drawable.femalesus1,
-        R.drawable.femalesus2,
-        R.drawable.femalesus3,
-        R.drawable.femalesus4
-    )
+    var selectedInterrogationSuspectId by mutableStateOf<String?>(null)
+        private set
 
-    init {
-        loadSavedCase()
-    }
+    private var interrogationTimerJob: Job? = null
+    private var activeInterrogationSuspectId: String? = null
+
+    init { loadSavedCase() }
 
     private fun loadSavedCase() {
-        val savedCaseJson = sharedPrefs.getString("current_case", null)
-        if (savedCaseJson != null) {
+        viewModelScope.launch {
             try {
-                val savedCase = json.decodeFromString<GameCase>(savedCaseJson)
-                _currentCase.value = savedCase
-
-                val initialMessages = savedCase.suspects.associate { it.id to listOf(
-                    InterrogationMessage("SISTEMA", "INTERROGATORIO REANUDADO", false, getCurrentTime())
-                ) }
-                _messages.value = initialMessages
+                val save = withContext(Dispatchers.IO) { gameSaveDao.getSave() }
+                if (save != null) {
+                    val savedState = json.decodeFromString<GameState>(save.serializedState)
+                    _gameState.value = savedState
+                    _messages.value = savedState.messages
+                    _gameResult.value = savedState.gameResult
+                    savedState.interrogationSessions.entries
+                        .firstOrNull { it.value.isActive }
+                        ?.let { startInterrogationTimer(it.key) }
+                } else {
+                    loadDefaultCase()
+                }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("GameViewModel", "Error loading game state from Room", e)
+                loadDefaultCase()
             }
         }
     }
 
-    private fun saveCase(gameCase: GameCase) {
-        val caseJson = json.encodeToString(gameCase)
-        sharedPrefs.edit().putString("current_case", caseJson).apply()
+    private fun loadDefaultCase() {
+        val case = CaseRepository.laCargaDelSilencio
+        val initialState = GameState(
+            currentCase = case,
+            phase = GamePhase.INTRO
+        )
+        _gameState.value = initialState
+        _messages.value = case.suspects.associate { it.id to listOf(
+            InterrogationMessage("SISTEMA", "EXPEDIENTE INICIADO", false, getCurrentTime())
+        ) }
+        saveGameState(initialState)
+    }
+
+    private fun saveGameState(state: GameState) {
+        viewModelScope.launch {
+            try {
+                val serialized = json.encodeToString(state)
+                withContext(Dispatchers.IO) {
+                    gameSaveDao.insertSave(GameSaveEntity(serialized))
+                }
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error saving game state to Room", e)
+            }
+        }
     }
 
     fun startNewInvestigation() {
+        _selectedClues.value = emptySet()
+        _deductionResult.value = null
+        _gameResult.value = null
+        loadDefaultCase()
+    }
+
+    fun exploreScene(locationId: String) {
+        val newState = GameEngine.exploreLocation(_gameState.value, locationId)
+        updateGameState(newState)
+    }
+
+    fun collectClue(clueId: String) {
+        val newState = GameEngine.exploreLocation(_gameState.value, clueId)
+        updateGameState(newState)
+    }
+
+    fun applyMinigameResult(locationName: String, result: String) {
+        val newState = GameEngine.applyMinigameResult(_gameState.value, locationName, result)
+        updateGameState(newState)
+    }
+
+    fun startInvestigation() {
+        val newState = GameEngine.navigateToPhase(_gameState.value, GamePhase.EXPLORE_SCENE)
+        updateGameState(newState)
+    }
+
+    fun linkClueToSuspect(clueId: String, suspectId: String?) {
+        val currentSuspectId = suspectId ?: ""
+        val newState = GameEngine.linkClueToSuspect(_gameState.value, clueId, currentSuspectId)
+        updateGameState(newState)
+    }
+
+    private fun updateGameState(newState: GameState) {
+        val oldAvailableClueIds = _gameState.value.currentCase?.clues?.filter { it.isAvailable }?.map { it.id }?.toSet() ?: emptySet()
+        val newAvailableClues = newState.currentCase?.clues?.filter { it.isAvailable } ?: emptyList()
+        val newlyUnlocked = newAvailableClues.filter { it.id !in oldAvailableClueIds }
+        
+        _gameState.value = newState
+        _messages.value = newState.messages
+        _gameResult.value = newState.gameResult
+        saveGameState(newState)
+        
+        if (oldAvailableClueIds.isNotEmpty() && newlyUnlocked.isNotEmpty()) {
+            newlyUnlocked.forEach { clue ->
+                _unlockedClueAlert.value = clue
+            }
+        }
+    }
+
+    var activeSpecialMoment by mutableStateOf<SpecialMoment?>(null)
+
+    fun selectInterrogationSuspect(suspectId: String) {
+        selectedInterrogationSuspectId = suspectId
+    }
+
+    fun onQuestionSelected(suspect: Suspect, question: Question) {
+        // Intercept key questions to trigger Special Moments
+        val hasTriggered = triggerSpecialMomentIfNeeded(suspect, question)
+        if (hasTriggered) return
+
+        executeQuestionNormally(suspect, question)
+    }
+
+    private fun triggerSpecialMomentIfNeeded(suspect: Suspect, question: Question): Boolean {
+        when (question.id) {
+            "q_carlos_3" -> {
+                activeSpecialMoment = SpecialMoment.ReconstructConversation(
+                    suspectId = suspect.id,
+                    questionId = question.id,
+                    correctSequence = listOf(
+                        "Salí de mi oficina privada en Barranquilla a las 7:45 PM.",
+                        "En el trayecto llamé por teléfono al inspector Tomás a las 8:10 PM.",
+                        "Llegué a la gasolinera del puerto a las 8:35 PM a comprar un café.",
+                        "Aparqué el vehículo a las 8:50 PM en la zona de carga.",
+                        "Finalmente ingresé al almacén principal a las 9:00 PM."
+                    ),
+                    scrambledSequence = listOf(
+                        "Aparqué el vehículo a las 8:50 PM en la zona de carga.",
+                        "Salí de mi oficina privada en Barranquilla a las 7:45 PM.",
+                        "Finalmente ingresé al almacén principal a las 9:00 PM.",
+                        "En el trayecto llamé por teléfono al inspector Tomás a las 8:10 PM.",
+                        "Llegué a la gasolinera del puerto a las 8:35 PM a comprar un café."
+                    ),
+                    rewardText = "CCTV del Puerto (clue_camara) y contradicción: Alibi de las 9 PM",
+                    clueIdToUnlock = "clue_camara",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "carlos_9pm", "clue_camara")
+                    }
+                )
+                return true
+            }
+            "q_tomas_4" -> {
+                activeSpecialMoment = SpecialMoment.ReconstructConversation(
+                    suspectId = suspect.id,
+                    questionId = question.id,
+                    correctSequence = listOf(
+                        "Inicié mi turno en la caseta de control a las 8:00 PM.",
+                        "Recibí la llamada de Carlos Herrera a las 8:10 PM para coordinar la inspección.",
+                        "Visualicé el contenedor 7-BETA aproximarse a la barrera a las 8:40 PM.",
+                        "Validé los manifiestos de importación en el sistema a las 8:45 PM.",
+                        "Finalmente levanté la barrera a las 8:48 PM permitiendo el paso."
+                    ),
+                    scrambledSequence = listOf(
+                        "Validé los manifiestos de importación en el sistema a las 8:45 PM.",
+                        "Inicié mi turno en la caseta de control a las 8:00 PM.",
+                        "Finalmente levanté la barrera a las 8:48 PM permitiendo el paso.",
+                        "Recibí la llamada de Carlos Herrera a las 8:10 PM para coordinar la inspección.",
+                        "Visualicé el contenedor 7-BETA aproximarse a la barrera a las 8:40 PM."
+                    ),
+                    rewardText = "USB con Correos (clue_usb) y contradicción: Cámaras del Puerto",
+                    clueIdToUnlock = "clue_usb",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "tomas_camara", "clue_usb")
+                    }
+                )
+                return true
+            }
+            "q_carlos_4" -> {
+                activeSpecialMoment = SpecialMoment.RememberDetails(
+                    questionText = "¿Cuál era la clave exacta y en qué página de la libreta de cuero marrón anotaba las transacciones Don Aurelio según el relato?",
+                    options = listOf(
+                        "Clave 'ALT-800' en la página 15",
+                        "Clave 'ATL-800' en la página 12",
+                        "Clave 'ALT-18' en la página 15",
+                        "Clave 'ATL-800' en la página 15"
+                    ),
+                    correctOption = "Clave 'ALT-800' en la página 15",
+                    contextStatement = "Don Aurelio siempre llevaba una corbata verde botella, escribía con un bolígrafo de tinta dorada, y registraba cada transacción en su libreta de cuero marrón bajo la clave 'ALT-800' en la página 15.",
+                    rewardText = "Agenda Mendoza (clue_agenda)",
+                    clueIdToUnlock = "clue_agenda",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "clue_agenda", "clue_agenda")
+                    }
+                )
+                return true
+            }
+            "q_valentina_2" -> {
+                activeSpecialMoment = SpecialMoment.RememberDetails(
+                    questionText = "¿Cuál es el identificador de la terminal remota y la hora exacta de ingreso de la póliza 402-B según Valentina?",
+                    options = listOf(
+                        "Terminal 'TERM-9' a las 5:45 PM",
+                        "Terminal 'TERM-4' a las 5:45 PM",
+                        "Terminal 'TERM-9' a las 4:02 PM",
+                        "Terminal 'TERM-2' a las 5:45 PM"
+                    ),
+                    correctOption = "Terminal 'TERM-9' a las 5:45 PM",
+                    contextStatement = "El seguro marítimo internacional se contrató por un valor de $180,000 bajo la póliza aduanera número 402-B, ingresada por la terminal remota 'TERM-9' a las 5:45 PM.",
+                    rewardText = "Registros Bancarios (clue_bancos) y contradicción: Seguro del Contenedor",
+                    clueIdToUnlock = "clue_bancos",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "valentina_seguro", "clue_bancos")
+                    }
+                )
+                return true
+            }
+            "q_marisol_2" -> {
+                activeSpecialMoment = SpecialMoment.RememberDetails(
+                    questionText = "¿En qué número de mesa se sentó Marisol y quiénes eran sus acompañantes según su testimonio?",
+                    options = listOf(
+                        "Mesa 4, doctor Restrepo y coronel Vargas",
+                        "Mesa 7, doctor Restrepo y coronel Vargas",
+                        "Mesa 4, doctor Restrepo y Carlos Herrera",
+                        "Mesa 4, doctor Vargas y coronel Restrepo"
+                    ),
+                    correctOption = "Mesa 4, doctor Restrepo y coronel Vargas",
+                    contextStatement = "Yo asistí a la cena benéfica del Club Campestre desde las 7:30 hasta las 11:15 de la noche, y me senté en la mesa 4 junto al doctor Restrepo y el coronel Vargas.",
+                    rewardText = "Contrato de Ganancias (clue_contrato) y contradicción: Relación Carlos-Marisol",
+                    clueIdToUnlock = "clue_contrato",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "carlos_marisol_relation", "clue_contrato")
+                    }
+                )
+                return true
+            }
+            "q_tomas_2" -> {
+                activeSpecialMoment = SpecialMoment.PsychologicalProfile(
+                    suspectId = suspect.id,
+                    questionText = "Tomás evita contacto visual directo, repite constantemente que 'solo seguía protocolos', y sus manos tiemblan visiblemente al sujetar el registro de aduanas. ¿Cuál es el diagnóstico lógico de su perfil?",
+                    options = listOf(
+                        "Defensivo con signos de pánico/culpabilidad",
+                        "Mano firme y actitud colaborativa",
+                        "Completamente indiferente y relajado",
+                        "Altivo y seguro de su inocencia"
+                    ),
+                    correctOption = "Defensivo con signos de pánico/culpabilidad",
+                    rewardText = "CCTV del Puerto (clue_camara) y contradicción: Relación Tomás-Carlos",
+                    clueIdToUnlock = "clue_camara",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "tomas_carlos", "clue_camara")
+                    }
+                )
+                return true
+            }
+            "q_valentina_4" -> {
+                activeSpecialMoment = SpecialMoment.PsychologicalProfile(
+                    suspectId = suspect.id,
+                    questionText = "Valentina responde con tono monótono, sonríe de forma fingida ante la mención de las cuentas fantasmas, y cita artículos exactos del código tributario para justificar los desvíos. ¿Qué rasgo describe su perfil?",
+                    options = listOf(
+                        "Calculadora y fría con actitud evasiva",
+                        "Angustiada y asustada con ganas de cooperar",
+                        "Confundida y despistada sobre finanzas",
+                        "Irritada y agresiva con la autoridad"
+                    ),
+                    correctOption = "Calculadora y fría con actitud evasiva",
+                    rewardText = "Registros Bancarios (clue_bancos) y contradicción: Relación Valentina-Carlos",
+                    clueIdToUnlock = "clue_bancos",
+                    onComplete = { success ->
+                        resolveSpecialMoment(suspect, question, success, "carlos_valentina_relation", "clue_bancos")
+                    }
+                )
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun resolveSpecialMoment(suspect: Suspect, question: Question, success: Boolean, effectValue: String, clueIdToUnlock: String?) {
+        activeSpecialMoment = null
+        if (success) {
+            // Success: Unlock promised clue first
+            if (clueIdToUnlock != null) {
+                val stateWithClue = GameEngine.unlockAndDiscoverClue(_gameState.value, clueIdToUnlock)
+                updateGameState(stateWithClue)
+            }
+            // Then execute normal question response
+            executeQuestionNormally(suspect, question)
+        } else {
+            // Failure: Deduct trust and append warning message
+            val currentMsgs = _gameState.value.messages[suspect.id] ?: emptyList()
+            val failMsg = InterrogationMessage(
+                sender = "SISTEMA",
+                text = "❌ FALLO EN EL MOMENTO ESPECIAL: El sospechoso detectó tus dudas y se cierra. (-15 Confianza)",
+                isDetective = false,
+                time = getCurrentTime()
+            )
+            val updatedSuspects = (_gameState.value.currentCase?.suspects ?: emptyList()).map {
+                if (it.id == suspect.id) {
+                    it.copy(trustLevel = (it.trustLevel - 15).coerceIn(0, 100))
+                } else it
+            }
+            val newState = _gameState.value.copy(
+                currentCase = _gameState.value.currentCase?.copy(suspects = updatedSuspects),
+                messages = _gameState.value.messages + (suspect.id to (currentMsgs + failMsg))
+            )
+            updateGameState(newState)
+        }
+    }
+
+    private fun executeQuestionNormally(suspect: Suspect, question: Question) {
         viewModelScope.launch {
             isGenerating = true
-            errorMessage = null
-            _gameResult.value = null
-            _clueAssignments.value = emptyMap()
-            _deductionAnalysis.value = ""
             try {
-                val suspectCount = (3..5).random()
-                val clueCount = (4..10).random()
-                
-                var newCase: GameCase? = null
-                try {
-                    Log.d("GameViewModel", "Intentando generar caso con Gemini ($suspectCount sospechosos, $clueCount pistas)...")
-                    newCase = geminiService.generateCase(suspectCount, clueCount)
-                } catch (e: Exception) {
-                    Log.e("GameViewModel", "Error al generar caso con Gemini: ${e.message}")
-                }
-
-                if (newCase == null) {
-                    Log.d("GameViewModel", "Gemini falló o retornó nulo, intentando backup con Groq...")
-                    newCase = groqService.generateCase(suspectCount, clueCount)
-                }
-
-                if (newCase != null) {
-                    var maleIdx = 0
-                    var femaleIdx = 0
-                    
-                    val mappedSuspects = newCase.suspects.map { suspect ->
-                        val imageId = if (suspect.gender.uppercase() == "FEMALE") {
-                            femaleImages.getOrElse(femaleIdx++) { femaleImages[0] }
-                        } else {
-                            maleImages.getOrElse(maleIdx++) { maleImages[0] }
-                        }
-                        suspect.copy(imageId = imageId)
-                    }
-                    val finalCase = newCase.copy(suspects = mappedSuspects)
-                    _currentCase.value = finalCase
-                    saveCase(finalCase)
-                    
-                    // Initialize messages
-                    val initialMessages = mappedSuspects.associate { it.id to listOf(
-                        InterrogationMessage("SISTEMA", "INTERROGATORIO INICIADO", false, getCurrentTime())
-                    ) }
-                    _messages.value = initialMessages
+                val discoveredClueIds = _gameState.value.discoveredClues.map { it.id }
+                val response = geminiService.getDynamicInterrogationResponse(
+                    suspectId = suspect.id,
+                    questionId = question.id,
+                    trustLevel = suspect.trustLevel,
+                    discoveredClueIds = discoveredClueIds
+                )
+                if (response != null) {
+                    val newState = GameEngine.applyDynamicQuestionResponse(
+                        state = _gameState.value,
+                        suspectId = suspect.id,
+                        questionId = question.id,
+                        dialog = response.dialog,
+                        effectType = response.effect.type,
+                        effectValue = response.effect.value,
+                        narratorNote = response.narratorNote
+                    )
+                    updateGameState(newState)
                 } else {
-                    errorMessage = "No se pudo generar el caso con Gemini ni con Groq (backup)."
+                    val newState = GameEngine.askQuestion(_gameState.value, suspect.id, question.id)
+                    updateGameState(newState)
                 }
             } catch (e: Exception) {
-                errorMessage = "Error de IA (ambos proveedores fallaron): ${e.message}"
+                Log.e("GameViewModel", "Error in dynamic interrogation", e)
+                val newState = GameEngine.askQuestion(_gameState.value, suspect.id, question.id)
+                updateGameState(newState)
+            } finally {
+                isGenerating = false
             }
-            isGenerating = false
         }
     }
 
-    fun sendMessage(suspect: AISuspect, text: String, strategy: String) {
-        val suspectId = suspect.id
-        val currentTime = getCurrentTime()
+    fun startInterrogation(suspectId: String) {
+        stopInterrogationTimer()
+        val newState = GameEngine.startInterrogation(_gameState.value, suspectId)
+        updateGameState(newState)
+        activeInterrogationSuspectId = suspectId
+        startInterrogationTimer(suspectId)
+    }
+
+    fun endInterrogation(suspectId: String) {
+        stopInterrogationTimer()
+        val newState = GameEngine.endInterrogation(_gameState.value, suspectId)
+        updateGameState(newState)
+        activeInterrogationSuspectId = null
+    }
+
+    fun getQuestionsForRound(suspectId: String): List<Question> {
+        return GameEngine.getQuestionsForRound(_gameState.value, suspectId)
+    }
+
+    fun isInterrogationActive(suspectId: String): Boolean {
+        val session = _gameState.value.interrogationSessions[suspectId]
+        return session?.isActive == true
+    }
+
+    fun isInterrogationCompleted(suspectId: String): Boolean {
+        return suspectId in _gameState.value.interrogatedSuspects
+    }
+
+    fun getInterrogationSummary(suspectId: String): InterrogationSummary? {
+        return _gameState.value.interrogationSummaries[suspectId]
+    }
+
+    fun getInterrogationTimeRemaining(suspectId: String): Int {
+        return _gameState.value.interrogationSessions[suspectId]?.timeRemainingSeconds ?: 0
+    }
+
+    private fun startInterrogationTimer(suspectId: String) {
+        interrogationTimerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                val state = _gameState.value
+                val session = state.interrogationSessions[suspectId]
+                if (session == null || !session.isActive) break
+
+                val newState = if (session.timeRemainingSeconds <= 1) {
+                    GameEngine.handleTimeExpired(state, suspectId)
+                } else {
+                    GameEngine.tickInterrogationTime(state, suspectId)
+                }
+                updateGameState(newState)
+            }
+        }
+    }
+
+    private fun stopInterrogationTimer() {
+        interrogationTimerJob?.cancel()
+        interrogationTimerJob = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopInterrogationTimer()
+    }
+
+    fun sendMessage(suspect: Suspect, text: String) {
+        updateMessages(suspect.id, InterrogationMessage("INVESTIGADOR", text, true, getCurrentTime()))
+        viewModelScope.launch {
+            val history = _messages.value[suspect.id]?.takeLast(5)?.map { (if (it.isDetective) "Detective" else suspect.name) to it.text } ?: emptyList()
+            val response = geminiService.getSuspectResponse(suspect, history, text)
+            updateMessages(suspect.id, InterrogationMessage(suspect.name, response, false, getCurrentTime()))
+        }
+    }
+
+    fun toggleClueSelection(clueId: String) {
+        _selectedClues.update { current ->
+            if (current.contains(clueId)) current - clueId else current + clueId
+        }
+    }
+
+    fun evaluateDeduction() {
+        val case = gameState.value.currentCase ?: return
+        val selectedIds = _selectedClues.value
         
-        // Add user message
-        val userMsg = InterrogationMessage("INVESTIGADOR", text, true, currentTime)
-        updateMessages(suspectId, userMsg)
+        if (selectedIds.size < 2) {
+            _deductionResult.value = DeductionResult(false, "Conecta al menos 2 pistas.")
+            return
+        }
+
+        val selectedClueObjects = case.clues.filter { it.id in selectedIds }
+        val commonSuspects = selectedClueObjects
+            .map { it.linkedSuspects.toSet() }
+            .reduce { acc, suspects -> acc intersect suspects }
 
         viewModelScope.launch {
-            val history = _messages.value[suspectId]
-                ?.filter { !it.text.startsWith("INTERROGATORIO") }
-                ?.takeLast(5)
-                ?.map { (if (it.isDetective) "Detective" else suspect.name) to it.text }
-                ?: emptyList()
-
-            var response: String? = null
-            try {
-                Log.d("GameViewModel", "Intentando obtener respuesta de sospechoso con Gemini...")
-                response = geminiService.getSuspectResponse(
-                    suspect.name,
-                    suspect.personality,
-                    history,
-                    text,
-                    strategy
+            if (commonSuspects.isNotEmpty()) {
+                val suspectId = commonSuspects.first()
+                val suspect = case.suspects.find { it.id == suspectId }
+                
+                val analysis = groqService.analyzeClueConnection(case.title, suspect?.name ?: "Sospechoso", selectedClueObjects.map { it.title })
+                
+                _deductionResult.value = DeductionResult(
+                    isValid = true,
+                    message = analysis,
+                    suspectId = suspectId
                 )
-            } catch (e: Exception) {
-                Log.e("GameViewModel", "Error en Gemini: ${e.message}")
-            }
-
-            if (response == null || response == "...") {
-                Log.d("GameViewModel", "Intentando backup con Groq para respuesta del sospechoso...")
-                try {
-                    response = groqService.getSuspectResponse(
-                        suspect.name,
-                        suspect.personality,
-                        history,
-                        text
-                    )
-                } catch (e: Exception) {
-                    Log.e("GameViewModel", "Error en Groq (backup): ${e.message}")
+                val updatedSuspects = case.suspects.map {
+                    if (it.id == suspectId) it.copy(trustLevel = (it.trustLevel - 15).coerceIn(0, 100)) else it
                 }
+                updateGameState(_gameState.value.copy(currentCase = case.copy(suspects = updatedSuspects)))
+            } else {
+                _deductionResult.value = DeductionResult(false, "RELACIÓN DÉBIL: No hay una conexión lógica clara entre estos elementos.")
             }
-
-            val finalResponse = response ?: "..."
-            val aiMsg = InterrogationMessage(suspectId, finalResponse, false, getCurrentTime())
-            updateMessages(suspectId, aiMsg)
         }
     }
 
-    private fun updateMessages(suspectId: String, message: InterrogationMessage) {
-        val currentMap = _messages.value.toMutableMap()
-        val suspectMessages = currentMap[suspectId]?.toMutableList() ?: mutableListOf()
-        suspectMessages.add(message)
-        currentMap[suspectId] = suspectMessages
-        _messages.value = currentMap
-    }
-
-    private fun getCurrentTime(): String {
-        return SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-    }
-
-    // ---- Clue Assignment Functions ----
-
-    fun assignClueToSuspect(suspectName: String, clueTitle: String) {
-        val updatedMap = _clueAssignments.value.toMutableMap()
+    private fun updateMessages(id: String, msg: InterrogationMessage) {
+        val map = _messages.value.toMutableMap()
+        map[id] = (map[id] ?: emptyList()) + msg
+        _messages.value = map
         
-        // Remove clue from any other suspect first
-        _clueAssignments.value.forEach { (name, list) ->
-            updatedMap[name] = list.filterNot { it == clueTitle }
-        }
-
-        val currentClues = updatedMap[suspectName] ?: emptyList()
-        updatedMap[suspectName] = (currentClues + clueTitle).distinct()
-
-        _clueAssignments.value = updatedMap
+        _gameState.update { it.copy(messages = map) }
+        saveGameState(_gameState.value)
     }
 
-    fun getCorrectClueCount(): Int {
-        val gameCase = _currentCase.value ?: return 0
-        val assignments = _clueAssignments.value
-        
-        var correctCount = 0
-        gameCase.clues.forEach { clue ->
-            val ownerSuspect = gameCase.suspects.find { it.id == clue.ownerSuspectId }
-            val assignedToName = assignments.entries.find { entry ->
-                clue.title in entry.value
-            }?.key
-            if (ownerSuspect != null && assignedToName == ownerSuspect.name) {
-                correctCount++
-            }
-        }
-        return correctCount
+    fun confrontStatementWithClue(statementId: String, clueId: String) {
+        val newState = GameEngine.confrontStatementWithClue(_gameState.value, statementId, clueId)
+        updateGameState(newState)
     }
 
-    fun allCluesAssigned(): Boolean {
-        val currentCase = _currentCase.value ?: return false
-        val allClues = currentCase.clues.map { it.title }
-        val assignedClues = _clueAssignments.value.values.flatten().toSet()
-        return allClues.all { it in assignedClues }
+    fun compareStatements(statementId1: String, statementId2: String) {
+        val newState = GameEngine.compareStatements(_gameState.value, statementId1, statementId2)
+        updateGameState(newState)
     }
 
-    fun analyzeDeductions(assignments: Map<String, List<String>>) {
-        val currentCase = _currentCase.value ?: return
-        viewModelScope.launch {
-            isAnalyzing = true
-            val correctCount = getCorrectClueCount()
-            
-            var analysis: String? = null
-            try {
-                Log.d("GameViewModel", "Intentando analizar deducciones con Gemini...")
-                analysis = geminiService.getDeductionAnalysis(
-                    currentCase.title,
-                    currentCase.description,
-                    assignments,
-                    correctCount,
-                    currentCase.clues.size
-                )
-            } catch (e: Exception) {
-                Log.e("GameViewModel", "Error al analizar deducciones con Gemini: ${e.message}")
-            }
-
-            if (analysis == null || analysis.startsWith("Error")) {
-                Log.d("GameViewModel", "Intentando backup con Groq para análisis de deducciones...")
-                try {
-                    analysis = groqService.getDeductionAnalysis(
-                        currentCase.title,
-                        currentCase.description,
-                        assignments
-                    )
-                } catch (e: Exception) {
-                    Log.e("GameViewModel", "Error en Groq (backup) al analizar deducciones: ${e.message}")
-                }
-            }
-
-            _deductionAnalysis.value = analysis ?: "Error al analizar las deducciones."
-            isAnalyzing = false
-        }
+    fun pressSuspect(suspectId: String) {
+        val newState = GameEngine.pressSuspect(_gameState.value, suspectId)
+        updateGameState(newState)
     }
 
-    fun submitAccusation(accusedSuspectId: String) {
-        val gameCase = _currentCase.value ?: return
-        viewModelScope.launch {
-            isSubmittingAccusation = true
-            errorMessage = null
+    fun forceCooperation(suspectId: String) {
+        val newState = GameEngine.forceCooperation(_gameState.value, suspectId)
+        updateGameState(newState)
+    }
 
-            val accusedSuspect = gameCase.suspects.find { it.id == accusedSuspectId }
-            val guiltySuspect = gameCase.suspects.find { it.id == gameCase.guiltyId }
+    fun submitAccusation(accusedId: String, keyEvidenceId: String) {
+        isSubmittingAccusation = true
+        val updatedState = GameEngine.submitAccusation(_gameState.value, accusedId, keyEvidenceId)
+        updateGameState(updatedState)
+        isSubmittingAccusation = false
+    }
 
-            val isCorrect = accusedSuspectId == gameCase.guiltyId
-            val correctClues = getCorrectClueCount()
-
-            var epilogue: String? = null
-            try {
-                Log.d("GameViewModel", "Intentando generar epílogo con Gemini...")
-                epilogue = geminiService.generateEpilogue(
-                    caseTitle = gameCase.title,
-                    caseDescription = gameCase.description,
-                    guiltyName = guiltySuspect?.name ?: "Desconocido",
-                    accusedName = accusedSuspect?.name ?: "Desconocido",
-                    wasCorrect = isCorrect
-                )
-            } catch (e: Exception) {
-                Log.e("GameViewModel", "Error en epílogo con Gemini: ${e.message}")
-            }
-
-            if (epilogue == null || epilogue.startsWith("Error") || epilogue.contains("archivado")) {
-                Log.d("GameViewModel", "Intentando backup con Groq para generar epílogo...")
-                try {
-                    epilogue = groqService.generateEpilogue(
-                        caseTitle = gameCase.title,
-                        caseDescription = gameCase.description,
-                        guiltyName = guiltySuspect?.name ?: "Desconocido",
-                        accusedName = accusedSuspect?.name ?: "Desconocido",
-                        wasCorrect = isCorrect
-                    )
-                } catch (e: Exception) {
-                    Log.e("GameViewModel", "Error en Groq (backup) para epílogo: ${e.message}")
-                }
-            }
-
-            _gameResult.value = GameResult(
-                isCorrect = isCorrect,
-                accusedSuspectName = accusedSuspect?.name ?: "Desconocido",
-                actualGuiltyName = guiltySuspect?.name ?: "Desconocido",
-                epilogue = epilogue ?: "El caso ha sido archivado en los registros de OBSIDIAN.",
-                correctClueAssignments = correctClues,
-                totalClues = gameCase.clues.size
-            )
-
-            isSubmittingAccusation = false
+    fun saveSettings() {
+        sharedPrefs.edit().apply {
+            putBoolean("effects_enabled", isEffectsEnabled)
+            putFloat("effects_volume", effectsVolume)
+            putBoolean("music_enabled", isMusicEnabled)
+            putFloat("music_volume", musicVolume)
+            apply()
         }
     }
 
     fun resetGame() {
-        _currentCase.value = null
-        _messages.value = emptyMap()
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    gameSaveDao.deleteSave()
+                }
+            } catch (e: Exception) {
+                Log.e("GameViewModel", "Error deleting game save from Room", e)
+            }
+        }
+        _gameState.value = GameState()
+        _selectedClues.value = emptySet()
+        _deductionResult.value = null
         _gameResult.value = null
-        _clueAssignments.value = emptyMap()
-        _deductionAnalysis.value = ""
-        errorMessage = null
         sharedPrefs.edit().remove("current_case").apply()
     }
+
+    private fun getCurrentTime() = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 }
 
+sealed class SpecialMoment {
+    abstract val rewardText: String
+    abstract val clueIdToUnlock: String?
 
+    data class ReconstructConversation(
+        val suspectId: String,
+        val questionId: String,
+        val correctSequence: List<String>,
+        val scrambledSequence: List<String>,
+        override val rewardText: String,
+        override val clueIdToUnlock: String?,
+        val onComplete: (Boolean) -> Unit
+    ) : SpecialMoment()
+
+    data class RememberDetails(
+        val questionText: String,
+        val options: List<String>,
+        val correctOption: String,
+        val contextStatement: String,
+        override val rewardText: String,
+        override val clueIdToUnlock: String?,
+        val onComplete: (Boolean) -> Unit
+    ) : SpecialMoment()
+
+    data class PsychologicalProfile(
+        val suspectId: String,
+        val questionText: String,
+        val options: List<String>,
+        val correctOption: String,
+        override val rewardText: String,
+        override val clueIdToUnlock: String?,
+        val onComplete: (Boolean) -> Unit
+    ) : SpecialMoment()
+}

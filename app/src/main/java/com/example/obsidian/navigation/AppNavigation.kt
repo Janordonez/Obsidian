@@ -56,16 +56,3 @@ fun AppNavigation(
         }
     }
 }
-
-// VerdictScreen y AccusationScreen faltantes por implementar. Modificación temporal.
-
-@Composable
-fun VerdictScreen(x0: NavHostController, x1: GameViewModel, x2: Modifier) {
-    TODO("Not yet implemented")
-}
-
-@Composable
-fun AccusationScreen(x0: NavHostController, x1: GameViewModel, x2: Modifier) {
-    TODO("Not yet implemented")
-}
-
