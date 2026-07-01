@@ -331,10 +331,10 @@ class GameEngine(val state: GameState = GameState()) {
         private fun getStatementForQuestion(suspectId: String, questionId: String): String? {
             return when (suspectId) {
                 "suspect_carlos" -> when (questionId) {
-                    "q_carlos_1" -> "Yo... firmo muchos documentos al día, detective. No recuerdo cada uno de ellos."
-                    "q_carlos_2" -> "Nunca tuve relación con Logística del Caribe SAS."
-                    "q_carlos_3" -> "Estaba trabajando en el almacén a las 9 PM."
-                    "q_carlos_5" -> "No conozco personalmente a Marisol."
+                    "q_carlos_1" -> "Yo jamás he firmado ningún manifiesto de importación para ese contenedor, detective."
+                    "q_carlos_2" -> "No tengo absolutamente nada que ver con Logística del Caribe SAS, ni conozco esa firma."
+                    "q_carlos_3" -> "Estaba trabajando solo en el almacén a las 9 PM."
+                    "q_carlos_5" -> "Nunca he visto ni hablado con Marisol Mendoza, la hija del jefe."
                     "q_carlos_6" -> "Yo no escribí ese borrador."
                     "q_carlos_7" -> "Gracias... bueno, estaba haciendo el inventario como siempre. Nada fuera de lo normal."
                     "q_carlos_9" -> "Primero reviso los manifiestos, luego el sello aduanero, y finalmente firmo la salida."
@@ -342,25 +342,186 @@ class GameEngine(val state: GameState = GameState()) {
                 }
                 "suspect_tomas" -> when (questionId) {
                     "q_tomas_1" -> "Hice la ronda habitual, todo estaba correcto."
-                    "q_tomas_2" -> "No conozco personalmente a Carlos Herrera."
+                    "q_tomas_2" -> "Nunca he cruzado una palabra con ese tal Carlos Herrera, es un completo desconocido para mí."
                     "q_tomas_3" -> "Esos depósitos son ahorros personales."
-                    "q_tomas_4" -> "No sé de qué video me habla."
+                    "q_tomas_4" -> "Yo jamás he omitido ninguna inspección ni he salido en ninguna grabación del puerto."
+                    "q_tomas_5" -> "¡Le aseguro que nadie me dijo que ignorara ESE contenedor! ... Quiero decir, ningún contenedor."
                     else -> null
                 }
                 "suspect_valentina" -> when (questionId) {
                     "q_valentina_1" -> "Fueron transacciones operativas normales."
-                    "q_valentina_2" -> "El seguro se gestionó de forma automática desde mi terminal."
-                    "q_valentina_4" -> "No tengo registros detallados de esa entidad."
-                    "q_valentina_6" -> "No tengo relación alguna con cuentas en Panamá."
+                    "q_valentina_2" -> "El seguro se gestionó de forma automática desde mi terminal, cualquiera pudo usarla."
+                    "q_valentina_4" -> "Tengo registros de que Carlos coordinaba y realizaba las transferencias directamente con Logística del Caribe SAS."
+                    "q_valentina_6" -> "No tengo relación alguna con cuentas offshore en Panamá."
                     else -> null
                 }
                 "suspect_marisol" -> when (questionId) {
-                    "q_marisol_2" -> "Carlos venía frecuentemente a mi casa."
+                    "q_marisol_2" -> "Yo jamás he hecho ningún trato ni tengo negocios de ningún tipo con Carlos Herrera."
                     "q_marisol_5" -> "Son dividendos acordados de forma privada."
                     else -> null
                 }
                 else -> null
             }
+        }
+
+        fun applyDynamicQuestionResponse(
+            state: GameState,
+            suspectId: String,
+            questionId: String,
+            dialog: String,
+            effectType: String,
+            effectValue: String,
+            narratorNote: String
+        ): GameState {
+            val case = state.currentCase ?: return state
+            val suspect = case.suspects.find { it.id == suspectId } ?: return state
+            val question = suspect.availableQuestions.find { it.id == questionId } ?: return state
+            val session = state.interrogationSessions[suspectId] ?: return state
+
+            if (state.interrogatedSuspects.contains(suspectId) ||
+                questionId in session.askedQuestionIds ||
+                session.questionsThisRound >= 3
+            ) {
+                return state
+            }
+
+            if (suspect.trustLevel <= 0) {
+                val currentMsgs = state.messages[suspectId] ?: emptyList()
+                val systemMsg = InterrogationMessage(
+                    sender = "SISTEMA",
+                    text = "${suspect.name} se niega a cooperar.",
+                    isDetective = false,
+                    time = getCurrentTime()
+                )
+                return state.copy(messages = state.messages + (suspectId to (currentMsgs + systemMsg)))
+            }
+
+            var updatedSuspect = suspect
+            var pointsToAdd = 0
+            var contradictionFound = false
+            var updatedClues = case.clues
+            var keyPoint: String? = null
+
+            when (effectType.uppercase()) {
+                "TRUST" -> {
+                    val change = effectValue.toIntOrNull() ?: 0
+                    val newTrust = (suspect.trustLevel + change).coerceIn(0, 100)
+                    updatedSuspect = suspect.copy(trustLevel = newTrust)
+                    keyPoint = "Efecto Confianza: $change. Confianza actual: $newTrust."
+                }
+                "CONTRADICTION" -> {
+                    updatedSuspect = suspect.copy(
+                        contradictions = (suspect.contradictions + effectValue).distinct()
+                    )
+                    pointsToAdd += 200
+                    contradictionFound = true
+                    keyPoint = "⚠ CONTRADICCIÓN: $effectValue"
+                }
+                "UNLOCK_CLUE" -> {
+                    pointsToAdd += 50
+                    updatedClues = case.clues.map {
+                        if (it.id == effectValue) it.copy(isAvailable = true) else it
+                    }
+                    val clueTitle = case.clues.find { it.id == effectValue }?.title ?: effectValue
+                    keyPoint = "🔓 Pista desbloqueada: $clueTitle"
+                }
+                else -> {
+                    keyPoint = "Información obtenida."
+                }
+            }
+
+            val updatedSuspects = case.suspects.map { if (it.id == suspectId) updatedSuspect else it }
+            val currentMsgs = state.messages[suspectId] ?: emptyList()
+            val detMsg = InterrogationMessage("INVESTIGADOR", question.text, true, getCurrentTime())
+
+            val replyText = if (narratorNote.isNotBlank()) {
+                "($narratorNote) $dialog"
+            } else {
+                dialog
+            }
+
+            val suspectMsg = InterrogationMessage(
+                sender = suspect.name,
+                text = replyText,
+                isDetective = false,
+                time = getCurrentTime(),
+                isContradiction = effectType.uppercase() == "CONTRADICTION"
+            )
+
+            val updatedMessages = state.messages + (suspectId to (currentMsgs + detMsg + suspectMsg))
+
+            val statementText = getStatementForQuestion(suspectId, questionId) ?: dialog
+            val updatedStatements = if (state.statements.none { it.questionId == questionId }) {
+                state.statements + Statement(
+                    id = "stmt_$questionId",
+                    suspectId = suspectId,
+                    text = statementText,
+                    questionId = questionId
+                )
+            } else {
+                state.statements
+            }
+
+            val baseSusp = when (suspectId) {
+                "suspect_carlos" -> 65
+                "suspect_tomas" -> 50
+                "suspect_marisol" -> 35
+                "suspect_valentina" -> 40
+                else -> 0
+            }
+            val currentSusp = state.suspicionLevels[suspectId] ?: baseSusp
+            val suspicionIncrease = if (effectType.uppercase() == "CONTRADICTION") 10 else 5
+            val newSusp = (currentSusp + suspicionIncrease).coerceAtMost(100)
+            val updatedSuspicion = state.suspicionLevels + (suspectId to newSusp)
+
+            val newContradictionKey = if (effectType.uppercase() == "CONTRADICTION") {
+                when (questionId) {
+                    "q_carlos_1" -> "carlos_manifiesto"
+                    "q_carlos_3" -> "carlos_9pm"
+                    "q_carlos_6" -> "carlos_borrador"
+                    "q_valentina_2" -> "valentina_seguro"
+                    "q_valentina_6" -> "valentina_offshore"
+                    "q_tomas_2" -> "tomas_carlos"
+                    "q_tomas_4" -> "tomas_camara"
+                    "q_tomas_5" -> "tomas_ignorar"
+                    "q_marisol_2" -> "marisol_carlos_contrato"
+                    else -> questionId
+                }
+            } else null
+
+            val updatedContradictions = if (newContradictionKey != null) {
+                state.discoveredContradictions + newContradictionKey
+            } else {
+                state.discoveredContradictions
+            }
+
+            val updatedSession = session.copy(
+                askedQuestionIds = session.askedQuestionIds + questionId,
+                questionsThisRound = session.questionsThisRound + 1,
+                sessionKeyPoints = if (keyPoint != null) session.sessionKeyPoints + keyPoint else session.sessionKeyPoints
+            )
+
+            var nextState = state.copy(
+                currentCase = case.copy(clues = updatedClues, suspects = updatedSuspects),
+                messages = updatedMessages,
+                statements = updatedStatements,
+                suspicionLevels = updatedSuspicion,
+                discoveredContradictions = updatedContradictions,
+                interrogationSessions = state.interrogationSessions + (suspectId to updatedSession),
+                score = state.score + pointsToAdd,
+                progress = state.progress.copy(
+                    contradictionsFound = state.progress.contradictionsFound + (if (contradictionFound) 1 else 0)
+                )
+            )
+
+            if (updatedSession.questionsThisRound >= MAX_QUESTIONS_PER_ROUND) {
+                val remaining = suspect.availableQuestions.count { it.id !in updatedSession.askedQuestionIds }
+                if (remaining > 0) {
+                    nextState = advanceDialogueRound(nextState, suspectId)
+                }
+            }
+
+            return evaluatePhaseTransition(evaluateChainUnlocks(nextState))
         }
 
         fun askQuestion(state: GameState, suspectId: String, questionId: String): GameState {
@@ -745,6 +906,11 @@ class GameEngine(val state: GameState = GameState()) {
                 statementId == "stmt_q_carlos_1" && clueId == "clue_manifiesto" -> "carlos_manifiesto"
                 statementId == "stmt_q_carlos_3" && clueId == "clue_camara" -> "carlos_9pm"
                 statementId == "stmt_q_tomas_2" && clueId == "clue_usb" -> "tomas_carlos"
+                statementId == "stmt_q_tomas_4" && clueId == "clue_camara" -> "tomas_camara"
+                statementId == "stmt_q_tomas_5" && clueId == "clue_usb" -> "tomas_ignorar"
+                statementId == "stmt_q_valentina_2" && clueId == "clue_bancos" -> "valentina_seguro"
+                statementId == "stmt_q_valentina_6" && clueId == "clue_bancos" -> "valentina_offshore"
+                statementId == "stmt_q_marisol_2" && clueId == "clue_contrato" -> "marisol_carlos_contrato"
                 else -> null
             }
 
@@ -762,12 +928,12 @@ class GameEngine(val state: GameState = GameState()) {
                 // Wrong confrontation
                 val updatedSuspects = case.suspects.map { suspect ->
                     if (suspect.id == targetSuspectId) {
-                        suspect.copy(trustLevel = (suspect.trustLevel - 10).coerceIn(0, 100))
+                        suspect.copy(trustLevel = (suspect.trustLevel - 15).coerceIn(0, 100))
                     } else suspect
                 }
                 val systemMsg = InterrogationMessage(
                     sender = "SISTEMA",
-                    text = "CONFRONTACIÓN FALLIDA: Las pruebas no contradicen esta declaración directamente.",
+                    text = "CONFRONTACIÓN FALLIDA: Las pruebas no contradicen esta declaración directamente. (-15 Confianza)",
                     isDetective = false,
                     time = getCurrentTime()
                 )
@@ -784,7 +950,7 @@ class GameEngine(val state: GameState = GameState()) {
             // Correct confrontation!
             val updatedSuspects = case.suspects.map { suspect ->
                 if (suspect.id == targetSuspectId) {
-                    suspect.copy(trustLevel = (suspect.trustLevel - 20).coerceIn(0, 100))
+                    suspect.copy(trustLevel = (suspect.trustLevel + 15).coerceIn(0, 100))
                 } else suspect
             }
 
@@ -798,13 +964,44 @@ class GameEngine(val state: GameState = GameState()) {
             val newSusp = (currentSusp + 15).coerceAtMost(100)
             val updatedSuspicion = state.suspicionLevels + (targetSuspectId to newSusp)
 
+            val systemText = when (contradictionKey) {
+                "carlos_bancos" -> "¡CONTRADICCIÓN! Los registros bancarios demuestran que Carlos recibió fondos de Logística del Caribe, desmintiendo su declaración. (+15 Confianza)"
+                "carlos_manifiesto" -> "¡CONTRADICCIÓN! El manifiesto falsificado lleva la firma de Carlos, lo cual contradice su afirmación de no recordarlo. (+15 Confianza)"
+                "carlos_9pm" -> "¡CONTRADICCIÓN! El video de seguridad lo sitúa fuera del almacén a las 9 PM, rompiendo su alibi. (+15 Confianza)"
+                "tomas_carlos" -> "¡CONTRADICCIÓN! Los correos electrónicos de la USB demuestran que Tomás y Carlos se conocían y coordinaban operaciones. (+15 Confianza)"
+                "tomas_camara" -> "¡CONTRADICCIÓN! El video de la cámara del puerto muestra claramente a Tomás validando el contenedor sin inspección. (+15 Confianza)"
+                "tomas_ignorar" -> "¡CONTRADICCIÓN! La USB revela que Tomás recibió instrucciones específicas de Carlos para ignorar este contenedor. (+15 Confianza)"
+                "valentina_seguro" -> "¡CONTRADICCIÓN! Los registros muestran que el seguro fue tramitado desde el terminal y cuenta de Valentina, implicando su firma. (+15 Confianza)"
+                "valentina_offshore" -> "¡CONTRADICCIÓN! Valentina mintió: la cuenta offshore en Panamá posee autorizaciones financieras directas hechas por ella. (+15 Confianza)"
+                "marisol_carlos_contrato" -> "¡CONTRADICCIÓN! Marisol afirmó no tener relación con Carlos, pero el contrato privado de ganancias firmado por ambos demuestra lo contrario. (+15 Confianza)"
+                else -> "¡CONTRADICCIÓN DETECTADA! La evidencia desmiente la declaración. (+15 Confianza)"
+            }
+
             val systemMsg = InterrogationMessage(
                 sender = "SISTEMA",
-                text = "¡CONTRADICCIÓN DETECTADA! La evidencia desmiente la declaración.",
+                text = systemText,
                 isDetective = false,
                 time = getCurrentTime(),
                 isContradiction = true
             )
+
+            val extraReveal = when (contradictionKey) {
+                "carlos_9pm" -> "[REVELACIÓN ADICIONAL] El guardia nocturno del almacén testificó: 'Vi a Carlos salir apurado con una mochila negra pesada a las 9 PM. Parecía sumamente tenso y nervioso'. Esto sitúa a Carlos en la escena de la huida."
+                "carlos_bancos" -> "[REVELACIÓN ADICIONAL] Los logs del sistema registran que Logística del Caribe SAS fue dada de alta desde la dirección IP de la oficina privada de Carlos Herrera."
+                "carlos_manifiesto" -> "[REVELACIÓN ADICIONAL] Una pericia caligráfica oficial confirma que la firma estampada en el Manifiesto de Importación Falsificado corresponde de forma inequívoca al puño y letra de Carlos Herrera."
+                "valentina_seguro" -> "[PISTA FALSA / DESPISTE] Se descubrió un correo encriptado enviado por Valentina Ríos a un contacto de Panamá la tarde del crimen: 'El seguro del contenedor ya fue procesado, desvía los fondos a la cuenta especial. El viejo (Don Aurelio) ya no será un obstáculo'. Esto sugiere que Valentina planificó el desfalco y tenía motivos financieros."
+                "valentina_offshore" -> "[PISTA FALSA / DESPISTE] Se localizó un pasaporte de Valentina Ríos con tres sellos de entrada a Ciudad de Panamá en los últimos 60 días, coincidiendo con las fechas de las transferencias no respaldadas de la empresa."
+                "marisol_carlos_contrato" -> "[PISTA FALSA / DESPISTE] Marisol Mendoza retiró $50,000 en efectivo la tarde del crimen. Un empleado de finanzas declara haberla escuchado gritarle a su padre Don Aurelio: '¡Si no me das lo que me corresponde por las buenas, lo tomaré yo misma!'"
+                "tomas_carlos" -> "[PISTA FALSA / DESPISTE] Tomás Guerrero tenía una deuda de juego clandestino de $120,000 que fue saldada en efectivo en su totalidad al día siguiente de la muerte de Don Aurelio. El inspector tenía motivos financieros."
+                "tomas_camara" -> "[REVELACIÓN ADICIONAL] El video de alta definición de la caseta muestra al inspector Tomás Guerrero recibiendo un sobre abultado de manos de Carlos Herrera minutos antes de dar paso libre al contenedor."
+                else -> null
+            }
+
+            val updatedExtraInfo = if (extraReveal != null) {
+                (state.extraInfoFound + extraReveal).distinct()
+            } else {
+                state.extraInfoFound
+            }
 
             val nextState = state.copy(
                 currentCase = case.copy(suspects = updatedSuspects),
@@ -812,6 +1009,7 @@ class GameEngine(val state: GameState = GameState()) {
                 suspicionLevels = updatedSuspicion,
                 messages = state.messages + (targetSuspectId to (currentMsgs + systemMsg)),
                 score = state.score + 200,
+                extraInfoFound = updatedExtraInfo,
                 progress = state.progress.copy(
                     contradictionsFound = state.progress.contradictionsFound + 1
                 )
@@ -823,52 +1021,109 @@ class GameEngine(val state: GameState = GameState()) {
         fun compareStatements(state: GameState, statementId1: String, statementId2: String): GameState {
             val case = state.currentCase ?: return state
 
-            val isMatch = (statementId1 == "stmt_q_carlos_5" && statementId2 == "stmt_q_marisol_2") ||
-                    (statementId1 == "stmt_q_marisol_2" && statementId2 == "stmt_q_carlos_5")
+            val contradictionKey = when {
+                (statementId1 == "stmt_q_carlos_5" && statementId2 == "stmt_q_marisol_2") ||
+                (statementId1 == "stmt_q_marisol_2" && statementId2 == "stmt_q_carlos_5") -> "carlos_marisol_relation"
 
-            if (!isMatch) {
+                (statementId1 == "stmt_q_carlos_2" && statementId2 == "stmt_q_valentina_4") ||
+                (statementId1 == "stmt_q_valentina_4" && statementId2 == "stmt_q_carlos_2") -> "carlos_valentina_relation"
+
+                else -> null
+            }
+
+            if (contradictionKey == null) {
                 val systemMsg = InterrogationMessage(
                     sender = "SISTEMA",
-                    text = "COMPARACIÓN FALLIDA: Los testimonios no se contradicen mutuamente.",
+                    text = "COMPARACIÓN FALLIDA: Los testimonios no se contradicen mutuamente. (-5 Confianza a sospechosos involucrados)",
                     isDetective = false,
                     time = getCurrentTime()
                 )
+                val stmt1 = state.statements.find { it.id == statementId1 }
+                val stmt2 = state.statements.find { it.id == statementId2 }
+                val updatedSuspects = case.suspects.map { suspect ->
+                    if (suspect.id == stmt1?.suspectId || suspect.id == stmt2?.suspectId) {
+                        suspect.copy(trustLevel = (suspect.trustLevel - 5).coerceIn(0, 100))
+                    } else suspect
+                }
                 val updatedMessages = state.messages.mapValues { it.value + systemMsg }
-                return state.copy(messages = updatedMessages)
+                return state.copy(
+                    currentCase = case.copy(suspects = updatedSuspects),
+                    messages = updatedMessages
+                )
             }
 
-            val contradictionKey = "carlos_marisol_relation"
             if (state.discoveredContradictions.contains(contradictionKey)) {
                 return state
             }
 
             // Success comparison
             val updatedSuspects = case.suspects.map { suspect ->
-                when (suspect.id) {
-                    "suspect_carlos" -> suspect.copy(trustLevel = (suspect.trustLevel - 15).coerceIn(0, 100))
-                    "suspect_marisol" -> suspect.copy(trustLevel = (suspect.trustLevel - 10).coerceIn(0, 100))
+                when (contradictionKey) {
+                    "carlos_marisol_relation" -> {
+                        if (suspect.id == "suspect_carlos" || suspect.id == "suspect_marisol") {
+                            suspect.copy(trustLevel = (suspect.trustLevel + 15).coerceIn(0, 100))
+                        } else suspect
+                    }
+                    "carlos_valentina_relation" -> {
+                        if (suspect.id == "suspect_carlos" || suspect.id == "suspect_valentina") {
+                            suspect.copy(trustLevel = (suspect.trustLevel + 15).coerceIn(0, 100))
+                        } else suspect
+                    }
                     else -> suspect
                 }
             }
 
-            val carlosSusp = (state.suspicionLevels["suspect_carlos"] ?: 65) + 15
-            val marisolSusp = (state.suspicionLevels["suspect_marisol"] ?: 35) + 10
-            val updatedSuspicion = state.suspicionLevels + mapOf(
-                "suspect_carlos" to carlosSusp.coerceAtMost(100),
-                "suspect_marisol" to marisolSusp.coerceAtMost(100)
-            )
+            val systemText = when (contradictionKey) {
+                "carlos_marisol_relation" -> "¡CONTRADICCIÓN DETECTADA ENTRE TESTIMONIOS! Carlos y Marisol mintieron sobre su relación personal. (+15 Confianza)"
+                "carlos_valentina_relation" -> "¡CONTRADICCIÓN DETECTADA ENTRE TESTIMONIOS! Carlos negó vínculos con Logística del Caribe SAS, pero Valentina confirmó que él coordinaba transferencias directamente. (+15 Confianza)"
+                else -> "¡CONTRADICCIÓN DETECTADA ENTRE TESTIMONIOS! (+15 Confianza)"
+            }
 
             val systemMsg = InterrogationMessage(
                 sender = "SISTEMA",
-                text = "¡CONTRADICCIÓN DETECTADA ENTRE TESTIMONIOS! Carlos y Marisol mintieron sobre su relación personal.",
+                text = systemText,
                 isDetective = false,
                 time = getCurrentTime(),
                 isContradiction = true
             )
 
             val updatedMessages = state.messages.toMutableMap()
-            updatedMessages["suspect_carlos"] = (updatedMessages["suspect_carlos"] ?: emptyList()) + systemMsg
-            updatedMessages["suspect_marisol"] = (updatedMessages["suspect_marisol"] ?: emptyList()) + systemMsg
+            when (contradictionKey) {
+                "carlos_marisol_relation" -> {
+                    updatedMessages["suspect_carlos"] = (updatedMessages["suspect_carlos"] ?: emptyList()) + systemMsg
+                    updatedMessages["suspect_marisol"] = (updatedMessages["suspect_marisol"] ?: emptyList()) + systemMsg
+                }
+                "carlos_valentina_relation" -> {
+                    updatedMessages["suspect_carlos"] = (updatedMessages["suspect_carlos"] ?: emptyList()) + systemMsg
+                    updatedMessages["suspect_valentina"] = (updatedMessages["suspect_valentina"] ?: emptyList()) + systemMsg
+                }
+            }
+
+            val carlosSuspBonus = if (contradictionKey == "carlos_marisol_relation") 15 else 10
+            val marisolSuspBonus = if (contradictionKey == "carlos_marisol_relation") 10 else 0
+            val valentinaSuspBonus = if (contradictionKey == "carlos_valentina_relation") 15 else 0
+
+            val carlosSusp = (state.suspicionLevels["suspect_carlos"] ?: 65) + carlosSuspBonus
+            val marisolSusp = (state.suspicionLevels["suspect_marisol"] ?: 35) + marisolSuspBonus
+            val valentinaSusp = (state.suspicionLevels["suspect_valentina"] ?: 40) + valentinaSuspBonus
+
+            val updatedSuspicion = state.suspicionLevels + mapOf(
+                "suspect_carlos" to carlosSusp.coerceAtMost(100),
+                "suspect_marisol" to marisolSusp.coerceAtMost(100),
+                "suspect_valentina" to valentinaSusp.coerceAtMost(100)
+            )
+
+            val compReveal = when (contradictionKey) {
+                "carlos_marisol_relation" -> "[PISTA FALSA / DESPISTE] Un testigo afirma que Carlos Herrera y Marisol Mendoza se reunieron en secreto en una cafetería cercana al puerto la noche del crimen, discutiendo sobre el testamento de Don Aurelio."
+                "carlos_valentina_relation" -> "[REVELACIÓN ADICIONAL] Valentina Ríos declaró formalmente ante los fiscales: 'Carlos Herrera me presionó para autorizar las transferencias a Logística del Caribe. Me dijo que era un acuerdo directo con Don Aurelio, pero descubrí que las firmas del jefe estaban falsificadas'."
+                else -> null
+            }
+
+            val updatedExtraInfoComp = if (compReveal != null) {
+                (state.extraInfoFound + compReveal).distinct()
+            } else {
+                state.extraInfoFound
+            }
 
             val nextState = state.copy(
                 currentCase = case.copy(suspects = updatedSuspects),
@@ -876,6 +1131,7 @@ class GameEngine(val state: GameState = GameState()) {
                 suspicionLevels = updatedSuspicion,
                 messages = updatedMessages,
                 score = state.score + 250,
+                extraInfoFound = updatedExtraInfoComp,
                 progress = state.progress.copy(
                     contradictionsFound = state.progress.contradictionsFound + 1
                 )
@@ -935,6 +1191,36 @@ class GameEngine(val state: GameState = GameState()) {
             )
         }
 
+        fun forceCooperation(state: GameState, suspectId: String): GameState {
+            val case = state.currentCase ?: return state
+            val suspect = case.suspects.find { it.id == suspectId } ?: return state
+            val currentMsgs = state.messages[suspectId] ?: emptyList()
+
+            val penaltyPoints = 150
+            val newScore = (state.score - penaltyPoints).coerceAtLeast(0)
+
+            val updatedSuspects = case.suspects.map {
+                if (it.id == suspectId) {
+                    it.copy(trustLevel = 30)
+                } else it
+            }
+
+            val systemMsg = InterrogationMessage(
+                sender = "SISTEMA",
+                text = "⚖ ORDEN JUDICIAL APLICADA — Has forzado la cooperación de ${suspect.name} mediante orden de la fiscalía. Penalización: -$penaltyPoints Puntos.",
+                isDetective = false,
+                time = getCurrentTime()
+            )
+
+            val updatedMessages = state.messages + (suspectId to (currentMsgs + systemMsg))
+
+            return state.copy(
+                currentCase = case.copy(suspects = updatedSuspects),
+                score = newScore,
+                messages = updatedMessages
+            )
+        }
+
         fun submitAccusation(state: GameState, suspectId: String, clueId: String): GameState {
             val case = state.currentCase ?: return state
             val guilty = case.suspects.find { it.id == case.solution.guiltySuspectId }
@@ -961,25 +1247,72 @@ class GameEngine(val state: GameState = GameState()) {
 
             val missingClues = case.clues.filter { !it.isFound }
             val missingText = if (missingClues.isNotEmpty()) {
-                " Pistas no encontradas: ${missingClues.joinToString { it.title }}."
+                "\n\nPistas no recuperadas durante la investigación: ${missingClues.joinToString { it.title }}."
             } else {
-                ""
+                "\n\n¡Excelente trabajo de campo! Lograste recuperar el 100% de las evidencias físicas del caso."
             }
 
             val epilogue = when {
                 isCorrect -> {
-                    val letterDetail = if (state.hasSafeSecretLetter) {
-                        " La carta secreta firmada por Don Aurelio entregada por Oscar Ríos selló su destino definitivamente, sirviendo como prueba formal incontestable en el juicio."
+                    val sb = java.lang.StringBuilder()
+                    sb.append("¡CASO RESUELTO CON ÉXITO! Carlos Herrera fue detenido y condenado por homicidio agravado y contrabando aduanero masivo.\n\n")
+                    sb.append("El tribunal de Barranquilla validó plenamente las pruebas presentadas. Tu labor de interrogatorio fue fundamental para estructurar el caso penal:\n\n")
+                    
+                    sb.append("⚖ DESMONTAJE DE LA COARTADA DE CARLOS:\n")
+                    if (state.discoveredContradictions.contains("carlos_9pm")) {
+                        sb.append("• Se expuso que mintió sobre su ubicación a las 9 PM. El video del CCTV del puerto captó su auto saliendo de las instalaciones en la hora exacta del crimen, destruyendo su defensa.\n")
                     } else {
-                        " Desafortunadamente, la carta de advertencia manuscrita por Don Aurelio nunca fue recuperada de su caja fuerte, por lo que la fiscalía tuvo dificultades para demostrar premeditación total en el juicio."
+                        sb.append("• Al no demostrar la contradicción de su horario de salida en el interrogatorio, la fiscalía tuvo dificultades para situarlo en la escena, basándose puramente en indicios circunstanciales.\n")
                     }
-                    "¡CASO RESUELTO CON ÉXITO! ${accused?.name} fue detenido. Confesó todo ante el peso de las evidencias. El puerto vuelve a estar en paz.$letterDetail$missingText"
+                    if (state.discoveredContradictions.contains("carlos_manifiesto")) {
+                        sb.append("• Se probó la falsificación intelectual al confrontar su firma manuscrita directa en el Manifiesto de Importación.\n")
+                    }
+                    if (state.discoveredContradictions.contains("carlos_borrador")) {
+                        sb.append("• El borrador de alteración de pesos recuperado en su oficina demostró que la operación ilegal venía planeándose con semanas de anticipación.\n")
+                    }
+                    
+                    sb.append("\n⚖ DESMANTELAMIENTO DE LA RED DE CÓMPLICES:\n")
+                    var accomplicesProved = 0
+                    if (state.discoveredContradictions.contains("tomas_carlos") || state.discoveredContradictions.contains("tomas_camara")) {
+                        sb.append("• Tomás Guerrero (Inspector): Condenado a 8 años de prisión por cohecho y prevaricato, tras probarse mediante tus careos que omitió las inspecciones a cambio de sobornos.\n")
+                        accomplicesProved++
+                    }
+                    if (state.discoveredContradictions.contains("carlos_valentina_relation") || state.discoveredContradictions.contains("valentina_offshore") || state.discoveredContradictions.contains("valentina_seguro")) {
+                        sb.append("• Valentina Ríos (Contadora): Procesada por lavado de activos tras evidenciarse que coordinaba con Carlos transferencias a una cuenta fantasma en Panamá y gestionó de forma fraudulenta el seguro de la carga.\n")
+                        accomplicesProved++
+                    }
+                    if (state.discoveredContradictions.contains("carlos_marisol_relation") || state.discoveredContradictions.contains("marisol_carlos_contrato")) {
+                        sb.append("• Marisol Mendoza (Hija de la víctima): Recibió una condena de ejecución condicional por complicidad pasiva al probarse el acuerdo del 20% de ganancias ilícitas a cambio de su silencio.\n")
+                        accomplicesProved++
+                    }
+                    if (accomplicesProved == 0) {
+                        sb.append("• No lograste vincular a ningún cómplice en el tribunal mediante careos directos. Aunque Carlos fue condenado, el inspector de aduanas, la contadora y la hija de la víctima evadieron cargos graves por falta de pruebas vinculantes.\n")
+                    }
+
+                    sb.append("\n⚖ VALOR DE LA EVIDENCIA DOCUMENTAL:\n")
+                    sb.append("• La USB con correos (clue_usb) fue la prueba reina para demostrar el desvío de fondos aduaneros mediante la empresa fantasma 'Logística del Caribe'.\n")
+                    if (state.hasSafeSecretLetter) {
+                        sb.append("• La carta manuscrita por Don Aurelio obtenida en el estudio de abogados acreditó ante el juez la premeditación del crimen, demostrando que Don Aurelio iba a denunciar a Carlos al día siguiente de su muerte.")
+                    } else {
+                        sb.append("• Al no recuperar la carta manuscrita de la caja fuerte de los abogados, la premeditación del homicidio quedó en duda, catalogándose judicialmente como homicidio simple con agravantes.")
+                    }
+                    
+                    sb.append(missingText)
+                    sb.toString()
                 }
                 suspectId == "suspect_carlos" && clueId == "clue_usb" && !hasEnoughContradictions -> {
-                    "FALLO EN LA ACUSACIÓN: Aunque acusaste a Carlos Herrera con la USB correcta, la fiscalía desestimó el caso porque no descubriste suficientes contradicciones de Carlos durante los interrogatorios para desmontar su coartada. Quedó libre por duda razonable.$missingText"
+                    val sb = java.lang.StringBuilder()
+                    sb.append("FALLO EN LA ACUSACIÓN: Aunque identificaste a Carlos Herrera como culpable y presentaste la USB con correos, la fiscalía desestimó el caso penal principal.\n\n")
+                    sb.append("La defensa de Carlos sostuvo con éxito su coartada de que estuvo toda la noche en el almacén debido a que no descubriste suficientes contradicciones de Carlos durante los interrogatorios (se requieren al menos 3). Carlos Herrera quedó libre de cargos por duda razonable y el crimen de Don Aurelio quedó impune.")
+                    sb.append(missingText)
+                    sb.toString()
                 }
                 else -> {
-                    "FALLO EN LA INVESTIGACIÓN. ${accused?.name} fue liberado por falta de pruebas. El verdadero culpable, ${guilty?.name}, logró escapar del país.$missingText"
+                    val sb = java.lang.StringBuilder()
+                    sb.append("FALLO EN LA INVESTIGACIÓN. Acusaste formalmente a ${accused?.name ?: "un sospechoso erróneo"} sin sustento probatorio contundente.\n\n")
+                    sb.append("Las pruebas fueron declaradas insuficientes o impertinentes por el juez, ordenando su inmediata libertad. El verdadero culpable, ${guilty?.name ?: "Carlos Herrera"}, al percatarse del desvío de la investigación, vació las cuentas de la empresa y logró escapar del país con rumbo desconocido.")
+                    sb.append(missingText)
+                    sb.toString()
                 }
             }
 
@@ -991,10 +1324,12 @@ class GameEngine(val state: GameState = GameState()) {
                 correctClueAssignments = correctAssignments,
                 totalClues = case.clues.size,
                 rank = rank,
+                totalContradictions = 11,
                 foundContradictions = state.progress.contradictionsFound,
                 interrogatedCount = state.interrogatedSuspects.size,
                 explorationCount = state.explorationCount,
-                missingHints = missingClues.map { it.title }
+                missingHints = missingClues.map { it.title },
+                score = state.score
             )
 
             return state.copy(phase = GamePhase.VERDICT, gameResult = result)
@@ -1028,8 +1363,10 @@ class GameEngine(val state: GameState = GameState()) {
             val case = state.currentCase ?: return state
             val updatedClues = case.clues.map { clue ->
                 val available = when (clue.id) {
-                    "clue_usb" -> state.explorationCount >= 3
-                    "clue_contrato" -> state.clueAssignments.containsKey("clue_agenda")
+                    "clue_usb" -> state.explorationCount >= 3 || state.discoveredContradictions.contains("carlos_bancos")
+                    "clue_contrato" -> state.clueAssignments.containsKey("clue_agenda") || state.discoveredContradictions.contains("marisol_carlos_contrato")
+                    "clue_bancos" -> clue.isAvailable || state.discoveredContradictions.contains("carlos_manifiesto") || state.discoveredContradictions.contains("carlos_valentina_relation")
+                    "clue_camara" -> clue.isAvailable || state.discoveredContradictions.contains("tomas_carlos")
                     else -> clue.isAvailable
                 }
                 clue.copy(isAvailable = available)
@@ -1073,6 +1410,25 @@ class GameEngine(val state: GameState = GameState()) {
             return state.copy(currentCase = case.copy(clues = updatedClues, suspects = updatedSuspects))
         }
 
+        fun unlockAndDiscoverClue(state: GameState, clueId: String): GameState {
+            val case = state.currentCase ?: return state
+            val clue = case.clues.find { it.id == clueId } ?: return state
+            if (clue.isFound) return state // already discovered
+
+            val updatedClue = clue.copy(isFound = true, isAvailable = true)
+            val updatedClues = case.clues.map { if (it.id == clueId) updatedClue else it }
+            val newDiscovered = (state.discoveredClues + updatedClue).distinctBy { it.id }
+
+            val nextState = state.copy(
+                currentCase = case.copy(clues = updatedClues),
+                discoveredClues = newDiscovered,
+                progress = state.progress.copy(
+                    discoveredClues = newDiscovered.size
+                )
+            )
+            return evaluateChainUnlocks(nextState)
+        }
+
         fun applyMinigameResult(state: GameState, locationName: String, result: String): GameState {
             val case = state.currentCase ?: return state
             val updatedMinigames = state.minigameResults + (locationName to result)
@@ -1082,7 +1438,9 @@ class GameEngine(val state: GameState = GameState()) {
                 "Almacén del Puerto" -> {
                     if (result == "WON") {
                         val updatedClues = case.clues.map {
-                            if (it.id == "clue_manifiesto") it.copy(isFound = true, isAvailable = true) else it
+                            if (it.id == "clue_manifiesto") it.copy(isFound = true, isAvailable = true)
+                            else if (it.id == "clue_camara") it.copy(isAvailable = true)
+                            else it
                         }
                         val extra = "El número de serie del contenedor aparece en facturas de otras 3 empresas distintas en los últimos 6 meses."
                         val manifiestoClue = case.clues.first { it.id == "clue_manifiesto" }.copy(isFound = true, isAvailable = true)
@@ -1108,6 +1466,9 @@ class GameEngine(val state: GameState = GameState()) {
                 }
                 "Oficina de Importaciones Atlántico" -> {
                     if (result == "WON") {
+                        val updatedClues = case.clues.map {
+                            if (it.id == "clue_agenda") it.copy(isAvailable = true) else it
+                        }
                         val extra = "Borrador de instrucciones de Don Aurelio en la basura: indica declarar peso doble para cubrir faltantes."
                         val updatedSuspects = case.suspects.map { suspect ->
                             if (suspect.id == "suspect_carlos") {
@@ -1125,7 +1486,7 @@ class GameEngine(val state: GameState = GameState()) {
                             } else suspect
                         }
                         updatedState = updatedState.copy(
-                            currentCase = case.copy(suspects = updatedSuspects),
+                            currentCase = case.copy(suspects = updatedSuspects, clues = updatedClues),
                             extraInfoFound = (updatedState.extraInfoFound + extra).distinct(),
                             score = updatedState.score + 300
                         )
@@ -1140,11 +1501,16 @@ class GameEngine(val state: GameState = GameState()) {
                 "Caseta de Aduanas" -> {
                     if (result == "WON") {
                         val updatedClues = case.clues.map {
-                            if (it.id == "clue_camara") it.copy(isAvailable = true) else it
+                            if (it.id == "clue_camara") it.copy(isFound = true, isAvailable = true)
+                            else if (it.id == "clue_usb") it.copy(isAvailable = true)
+                            else it
                         }
                         val extra = "Tomás firmó 11 contenedores esa noche, excepto el 7-BETA, y cerró sesión 4 minutos después del despacho."
+                        val camaraClue = case.clues.first { it.id == "clue_camara" }.copy(isFound = true, isAvailable = true)
+                        val newDiscovered = (updatedState.discoveredClues + camaraClue).distinctBy { it.id }
                         updatedState = updatedState.copy(
                             currentCase = case.copy(clues = updatedClues),
+                            discoveredClues = newDiscovered,
                             extraInfoFound = (updatedState.extraInfoFound + extra).distinct(),
                             score = updatedState.score + 300
                         )
@@ -1162,10 +1528,13 @@ class GameEngine(val state: GameState = GameState()) {
                 "Residencia Mendoza" -> {
                     if (result == "WON") {
                         val updatedClues = case.clues.map {
-                            if (it.id == "clue_agenda") it.copy(isFound = true, isAvailable = true, description = "Agenda descifrada: Don Aurelio sospechaba de Carlos y su esquema con Logística del Caribe y Tomás. Menciona al abogado OR (Oscar Ríos).") else it
+                            if (it.id == "clue_agenda") it.copy(isFound = true, isAvailable = true, description = "Agenda descifrada: Don Aurelio sospechaba de Carlos y su esquema con Logística del Caribe y Tomás. Menciona al abogado OR (Oscar Ríos).")
+                            else if (it.id == "clue_contrato") it.copy(isAvailable = true)
+                            else it
                         }
                         val extra = "El abogado Oscar Ríos (OR) confirma que Don Aurelio lo llamó esa noche con temor, acordando reunirse al día siguiente."
-                        val newDiscovered = (updatedState.discoveredClues + case.clues.first { it.id == "clue_agenda" }.copy(isFound = true, isAvailable = true, description = "Agenda descifrada: Don Aurelio sospechaba de Carlos y su esquema con Logística del Caribe y Tomás. Menciona al abogado OR (Oscar Ríos).")).distinctBy { it.id }
+                        val agendaClue = case.clues.first { it.id == "clue_agenda" }.copy(isFound = true, isAvailable = true, description = "Agenda descifrada: Don Aurelio sospechaba de Carlos y su esquema con Logística del Caribe y Tomás. Menciona al abogado OR (Oscar Ríos).")
+                        val newDiscovered = (updatedState.discoveredClues + agendaClue).distinctBy { it.id }
                         updatedState = updatedState.copy(
                             currentCase = case.copy(clues = updatedClues),
                             discoveredClues = newDiscovered,
@@ -1174,9 +1543,9 @@ class GameEngine(val state: GameState = GameState()) {
                         )
                     } else if (result == "PARTIAL") {
                         val updatedClues = case.clues.map {
-                            if (it.id == "clue_agenda") it.copy(isFound = true, isAvailable = true, description = "Agenda parcialmente descifrada: Notas confusas sobre LdC, TG y CH.") else it
+                            if (it.id == "clue_agenda") it.copy(isFound = true, isAvailable = true, description = "Agenda descifrada: Don Aurelio sospechaba de Carlos y su esquema con Logística del Caribe y Tomás. Menciona al abogado OR (Oscar Ríos).") else it
                         }
-                        val newDiscovered = (updatedState.discoveredClues + case.clues.first { it.id == "clue_agenda" }.copy(isFound = true, isAvailable = true, description = "Agenda parcialmente descifrada: Notas confusas sobre LdC, TG y CH.")).distinctBy { it.id }
+                        val newDiscovered = (updatedState.discoveredClues + case.clues.first { it.id == "clue_agenda" }.copy(isFound = true, isAvailable = true, description = "Agenda descifrada: Don Aurelio sospechaba de Carlos y su esquema con Logística del Caribe y Tomás. Menciona al abogado OR (Oscar Ríos).")).distinctBy { it.id }
                         updatedState = updatedState.copy(
                             currentCase = case.copy(clues = updatedClues),
                             discoveredClues = newDiscovered,
@@ -1193,11 +1562,15 @@ class GameEngine(val state: GameState = GameState()) {
                 "Fiscalía" -> {
                     if (result == "WON") {
                         val updatedClues = case.clues.map {
-                            if (it.id == "clue_bancos") it.copy(isFound = true, isAvailable = true, description = "Registros bancarios completos: Muestran transacciones periódicas de dinero ilícito desde Logística del Caribe SAS a las cuentas de Carlos y Tomás. Flujo de $287,000 en 8 meses.") else it
+                            if (it.id == "clue_bancos") it.copy(isFound = true, isAvailable = true, description = "Registros bancarios completos: Muestran transacciones periódicas de dinero ilícito desde Logística del Caribe SAS a las cuentas de Carlos y Tomás. Flujo de $287,000 en 8 meses.")
+                            else if (it.id == "clue_usb") it.copy(isFound = true, isAvailable = true)
+                            else it
                         }
                         val extra = "Se detectó una transferencia de $40,000 hacia una cuenta anónima no identificada (posible implicación de Marisol)."
-                        val newDiscovered = (updatedState.discoveredClues + case.clues.first { it.id == "clue_bancos" }.copy(isFound = true, isAvailable = true, description = "Registros bancarios completos: Muestran transacciones periódicas de dinero ilícito desde Logística del Caribe SAS a las cuentas de Carlos y Tomás. Flujo de $287,000 en 8 meses.")).distinctBy { it.id }
-                        
+                        val banksClue = case.clues.first { it.id == "clue_bancos" }.copy(isFound = true, isAvailable = true, description = "Registros bancarios completos: Muestran transacciones periódicas de dinero ilícito desde Logística del Caribe SAS a las cuentas de Carlos y Tomás. Flujo de $287,000 en 8 meses.")
+                        val usbClue = case.clues.first { it.id == "clue_usb" }.copy(isFound = true, isAvailable = true)
+                        val newDiscovered = (updatedState.discoveredClues + listOf(banksClue, usbClue)).distinctBy { it.id }
+
                         val updatedSuspects = case.suspects.map { suspect ->
                             if (suspect.id == "suspect_valentina") {
                                 val exists = suspect.availableQuestions.any { it.id == "q_valentina_6" }
@@ -1237,7 +1610,8 @@ class GameEngine(val state: GameState = GameState()) {
                             if (it.id == "clue_contrato") it.copy(isFound = true, isAvailable = true, description = "Contrato de ganancias: Documento privado que pacta el 20% para Marisol y contiene una carta adjunta de Don Aurelio delegando responsabilidad interna a Carlos.") else it
                         }
                         val extra = "Carta adjunta de Don Aurelio: 'si algo me ocurre, el culpable está adentro y es de total confianza en la empresa'."
-                        val newDiscovered = (updatedState.discoveredClues + case.clues.first { it.id == "clue_contrato" }.copy(isFound = true, isAvailable = true, description = "Contrato de ganancias: Documento privado que pacta el 20% para Marisol y contiene una carta adjunta de Don Aurelio delegando responsabilidad interna a Carlos.")).distinctBy { it.id }
+                        val contratoClue = case.clues.first { it.id == "clue_contrato" }.copy(isFound = true, isAvailable = true, description = "Contrato de ganancias: Documento privado que pacta el 20% para Marisol y contiene una carta adjunta de Don Aurelio delegando responsabilidad interna a Carlos.")
+                        val newDiscovered = (updatedState.discoveredClues + contratoClue).distinctBy { it.id }
                         updatedState = updatedState.copy(
                             currentCase = case.copy(clues = updatedClues),
                             discoveredClues = newDiscovered,

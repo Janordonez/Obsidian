@@ -342,8 +342,8 @@ object CaseRepository {
             Clue(
                 id = "clue_bancos",
                 title = "Registros Bancarios",
-                description = "Extractos bancarios que revelan transferencias periódicas de dinero ilícito desde Logística del Caribe SAS a las cuentas de Carlos y el inspector Tomás.",
-                linkedSuspects = listOf("suspect_tomas", "suspect_carlos"),
+                description = "Registros Bancarios completos: Muestran transacciones periódicas de dinero ilícito desde Logística del Caribe SAS a las cuentas de Carlos y Tomás, transferencias directas a una cuenta offshore en Panamá a nombre de Valentina Ríos, y la autorización del pago del seguro del contenedor.",
+                linkedSuspects = listOf("suspect_tomas", "suspect_carlos", "suspect_valentina"),
                 importance = 80,
                 locationName = "Fiscalía",
                 isAvailable = false,
@@ -378,8 +378,8 @@ object CaseRepository {
             Clue(
                 id = "clue_camara",
                 title = "Video CCTV Puerto",
-                description = "Grabación de la cámara de seguridad del puerto que capta al Inspector Tomás Guerrero validando el contenedor de contrabando sin revisarlo.",
-                linkedSuspects = listOf("suspect_tomas"),
+                description = "Grabación de la cámara de seguridad del puerto que capta al Inspector Tomás Guerrero validando el contenedor de contrabando sin revisarlo, y muestra el auto de Carlos Herrera saliendo de las instalaciones a las 9:00 PM en punto.",
+                linkedSuspects = listOf("suspect_tomas", "suspect_carlos"),
                 importance = 60,
                 locationName = "Caseta de Aduanas",
                 isAvailable = false,

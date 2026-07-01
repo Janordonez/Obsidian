@@ -103,10 +103,30 @@ fun VerdictScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatCard(
+                label = "PUNTAJE FINAL",
+                value = "${result!!.score} PTS",
+                color = neonYellow,
+                modifier = Modifier.weight(1f)
+            )
+            StatCard(
+                label = "RANGO DETECTIVE",
+                value = result!!.rank,
+                color = if (result!!.isCorrect) CyanNeon else Color.Gray,
+                modifier = Modifier.weight(1.5f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         StatCard(
-            label = "PISTAS ASIGNADAS",
+            label = "PISTAS ASIGNADAS CORRECTAS",
             value = "${result!!.correctClueAssignments} / ${result!!.totalClues}",
-            color = neonYellow,
+            color = Color.White,
             modifier = Modifier.fillMaxWidth()
         )
 

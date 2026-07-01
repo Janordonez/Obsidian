@@ -161,5 +161,6 @@ data class GameResult(
     val totalSuspects: Int = 0,
     val interrogatedCount: Int = 0,
     val explorationCount: Int = 0,
-    val missingHints: List<String> = emptyList()
+    val missingHints: List<String> = emptyList(),
+    val score: Int = 0
 )

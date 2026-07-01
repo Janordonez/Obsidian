@@ -34,6 +34,7 @@ import com.example.obsidian.R
 import com.example.obsidian.data.model.*
 import com.example.obsidian.ui.theme.*
 import com.example.obsidian.ui.viewmodel.GameViewModel
+import com.example.obsidian.ui.viewmodel.SpecialMoment
 
 @Composable
 fun InterrogationScreen(
@@ -47,16 +48,7 @@ fun InterrogationScreen(
     
     val suspects = gameState.currentCase?.suspects ?: emptyList()
     
-    if (isGenerating) {
-        Box(modifier = modifier.fillMaxSize().background(BackgroundNoir), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = CyanNeon)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("GENERANDO EXPEDIENTE...", color = CyanNeon, fontWeight = FontWeight.Bold)
-            }
-        }
-        return
-    }
+    // Fullscreen loading overlay removed to prevent "generando expediente" flashing. Inline loading is shown in Chat instead.
 
     if (suspects.isEmpty()) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -235,11 +227,6 @@ fun InterrogationScreen(
                     Tab(
                         selected = activeTab == 2,
                         onClick = { activeTab = 2 },
-                        text = { Text("CONFRONTAR", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace) }
-                    )
-                    Tab(
-                        selected = activeTab == 3,
-                        onClick = { activeTab = 3 },
                         text = { Text("TESTIMONIOS", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace) }
                     )
                 }
@@ -258,15 +245,25 @@ fun InterrogationScreen(
                                 userText = userText,
                                 onTextChange = { userText = it },
                                 isActive = isActive,
-                                isCompleted = isCompleted
+                                isCompleted = isCompleted,
+                                isGenerating = isGenerating
                             )
                         }
                         1 -> StatementsTabContent(suspect = suspect, gameState = gameState)
-                        2 -> ConfrontationTabContent(suspect = suspect, gameState = gameState, viewModel = viewModel)
-                        3 -> TestimoniesComparisonTabContent(gameState = gameState, viewModel = viewModel)
+                        2 -> TestimoniesComparisonTabContent(gameState = gameState, viewModel = viewModel)
                     }
                 }
             }
+        }
+    }
+
+    // Render Special Moment Minigame overlay
+    gameState.let {
+        viewModel.activeSpecialMoment?.let { moment ->
+            SpecialMomentOverlay(
+                moment = moment,
+                onDismiss = { viewModel.activeSpecialMoment = null }
+            )
         }
     }
 }
@@ -433,7 +430,8 @@ fun ChatTabContent(
     userText: String,
     onTextChange: (String) -> Unit,
     isActive: Boolean,
-    isCompleted: Boolean
+    isCompleted: Boolean,
+    isGenerating: Boolean
 ) {
     val carlosContradictions = gameState.discoveredContradictions.filter { it.startsWith("carlos_") }
     val canPress = suspect.id == "suspect_carlos" && carlosContradictions.size >= 3 && !gameState.hasPressedCarlos
@@ -461,6 +459,7 @@ fun ChatTabContent(
             ConversationHistory(
                 messages = messages,
                 suspectName = suspect.name,
+                isGenerating = isGenerating,
                 modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 6.dp)
             )
         }
@@ -482,28 +481,96 @@ fun ChatTabContent(
                 }
             }
             else -> {
-                Text(
-                    text = "ELIGE EL TONO ADECUADO PARA ESTE SOSPECHOSO",
-                    color = Color.Gray,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(bottom = 6.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    roundQuestions.forEach { question ->
-                        QuestionChip(
-                            question = question,
-                            modifier = Modifier.weight(1f),
-                            onClick = { viewModel.onQuestionSelected(suspect, question) }
-                        )
+                if (suspect.trustLevel <= 0) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B1010)),
+                        border = BorderStroke(1.dp, AggressiveRed),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "⛔ SOSPECHOSO NO COOPERATIVO",
+                                color = AggressiveRed,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "${suspect.name} se niega a responder más preguntas en este estado.",
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { viewModel.forceCooperation(suspect.id) },
+                                colors = ButtonDefaults.buttonColors(containerColor = AggressiveRed, contentColor = Color.White),
+                                modifier = Modifier.fillMaxWidth().height(38.dp),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text("FORZAR COOPERACIÓN CON ORDEN (-150 PTS)", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+                        }
                     }
-                    repeat((3 - roundQuestions.size).coerceAtLeast(0)) {
-                        EmptyQuestionSlot(modifier = Modifier.weight(1f))
+                } else {
+                    if (isGenerating) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = PanelColor),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp)
+                                .border(1.dp, CyanNeon.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = CyanNeon,
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "${suspect.name.uppercase()} ESTÁ REDACTANDO RESPUESTA...",
+                                    color = CyanNeon,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "ELIGE EL TONO ADECUADO PARA ESTE SOSPECHOSO",
+                            color = Color.Gray,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            roundQuestions.forEach { question ->
+                                QuestionChip(
+                                    question = question,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { viewModel.onQuestionSelected(suspect, question) }
+                                )
+                            }
+                            repeat((3 - roundQuestions.size).coerceAtLeast(0)) {
+                                EmptyQuestionSlot(modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
 
@@ -514,7 +581,7 @@ fun ChatTabContent(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (remainingQuestions == 0 || (session?.questionsThisRound ?: 0) >= 3) {
+                    if (remainingQuestions == 0 || (session?.questionsThisRound ?: 0) >= 3 || suspect.trustLevel <= 0) {
                         Button(
                             onClick = { viewModel.endInterrogation(suspect.id) },
                             colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black),
@@ -591,31 +658,218 @@ fun PressureCarlosBanner(onClick: () -> Unit) {
     }
 }
 
+fun getContradictionNarrative(key: String): Pair<String, String> {
+    return when (key) {
+        "carlos_manifiesto" -> Pair(
+            "La Firma Falsificada",
+            "Carlos alegaba no recordar quién autorizó el despacho, pero confrontaste su testimonio con el Manifiesto de Importación, demostrando que fue su propia firma la que despachó el contenedor."
+        )
+        "carlos_9pm" -> Pair(
+            "La Fuga del Almacén",
+            "Carlos juraba haber estado haciendo inventario solo en el almacén a las 9 PM. Sin embargo, confrontaste su coartada con el video del CCTV del puerto, el cual captó su vehículo saliendo a esa misma hora."
+        )
+        "carlos_borrador" -> Pair(
+            "La Orden Escrita",
+            "Carlos negó haber escrito el borrador de alteración de peso de la carga. Lo confrontaste con el documento recuperado en la oficina, probando su letra y autoría intelectual en el fraude."
+        )
+        "carlos_usb_fraude" -> Pair(
+            "Conocimiento del Fraude",
+            "Carlos sostenía que Don Aurelio era ajeno al fraude aduanero. Los correos de la USB demostraron que Don Aurelio lo había descubierto y Carlos lo mató en un forcejeo al verse acorralado."
+        )
+        "valentina_seguro" -> Pair(
+            "La Autoría del Seguro",
+            "Valentina afirmó que el seguro del contenedor se tramitó automáticamente. Lo confrontaste con la evidencia del log de terminales de la Fiscalía, demostrando que fue iniciado manualmente desde su sesión privada."
+        )
+        "valentina_offshore" -> Pair(
+            "Las Cuentas en Panamá",
+            "Valentina declaró no tener relación con transacciones extranjeras. La confrontación con los Registros Bancarios reveló firmas de desvíos y transferencias a su cuenta offshore por $180,000."
+        )
+        "tomas_carlos" -> Pair(
+            "La Reunión Clandestina",
+            "El inspector Tomás Guerrero juró no conocer a Carlos. Al comparar su testimonio con el CCTV o fotos, expusiste su mentira, revelando reuniones secretas fuera de horas de aduana."
+        )
+        "tomas_camara" -> Pair(
+            "El Control Ignorado",
+            "Tomás afirmó que validó e inspeccionó debidamente el contenedor 7-BETA. El CCTV del puerto demostró que le dio paso libre sin bajarse de su garita, recibiendo sobornos de la red."
+        )
+        "tomas_ignorar" -> Pair(
+            "El Desliz de Aduanas",
+            "Tomás declaró que no recibió instrucciones. Durante la presión del interrogatorio, cometió el desliz de admitir que 'nadie le dijo que ignorara ESE contenedor específico', implicando que sí lo hizo con otros."
+        )
+        "marisol_carlos_contrato" -> Pair(
+            "El Pacto de Silencio",
+            "Marisol Mendoza alegó no tener trato comercial con Carlos Herrera. Confrontaste su declaración con el Contrato Privado de Ganancias del 20%, probando su complicidad y silencio pagado."
+        )
+        "carlos_marisol_relation" -> Pair(
+            "Vínculo Oculto",
+            "Al comparar los testimonios de Carlos y Marisol, expusiste que ambos negaban conocerse en el ámbito personal, contradiciendo las reuniones secretas y el flujo de fondos entre ellos."
+        )
+        "carlos_valentina_relation" -> Pair(
+            "La Ruta de Fondos de la Contadora",
+            "Comparaste el testimonio de Carlos (quien negó conocer a Logística del Caribe SAS) con el de Valentina (quien afirmó que Carlos coordinaba las transferencias directamente con esa firma), revelando la red financiera."
+        )
+        else -> Pair("Contradicción Detectada", "Evidencia contradictoria expuesta durante el careo.")
+    }
+}
+
 // ----------------------------------------------------
-// TAB 1: DECLARACIONES FORMALES
+// TAB 1: DECLARACIONES FORMALES Y BITÁCORA DE MENTIRAS
 // ----------------------------------------------------
 @Composable
 fun StatementsTabContent(suspect: Suspect, gameState: GameState) {
     val suspectStatements = gameState.statements.filter { it.suspectId == suspect.id }
+    
+    val suspectContradictions = gameState.discoveredContradictions.filter { key ->
+        when (suspect.id) {
+            "suspect_carlos" -> key.startsWith("carlos_")
+            "suspect_tomas" -> key.startsWith("tomas_") || key == "carlos_marisol_relation" || key == "carlos_valentina_relation"
+            "suspect_valentina" -> key.startsWith("valentina_") || key == "carlos_valentina_relation"
+            "suspect_marisol" -> key.startsWith("marisol_") || key == "carlos_marisol_relation"
+            else -> false
+        }
+    }
 
-    if (suspectStatements.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
-            contentAlignment = Alignment.Center
-        ) {
+    val suspectNameKeyword = when (suspect.id) {
+        "suspect_carlos" -> "Carlos"
+        "suspect_tomas" -> "Tomás"
+        "suspect_valentina" -> "Valentina"
+        "suspect_marisol" -> "Marisol"
+        else -> ""
+    }
+    
+    val suspectExtraRevelations = gameState.extraInfoFound.filter { info ->
+        suspectNameKeyword.isNotEmpty() && info.contains(suspectNameKeyword, ignoreCase = true)
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (suspectContradictions.isNotEmpty()) {
+            item {
+                Text(
+                    text = "CONTRADICCIONES DEMOSTRADAS (${suspectContradictions.size})",
+                    color = neonYellow,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+            }
+            items(suspectContradictions.toList()) { key ->
+                val (title, description) = getContradictionNarrative(key)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, neonYellow.copy(alpha = 0.4f), RoundedCornerShape(8.dp)),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161508))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = neonYellow,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = title.uppercase(),
+                                color = neonYellow,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = description,
+                            color = Color.LightGray,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+            item {
+                HorizontalDivider(color = Color.DarkGray, thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
+            }
+        }
+
+        if (suspectExtraRevelations.isNotEmpty()) {
+            item {
+                Text(
+                    text = "REVELACIONES Y CONEXIONES (${suspectExtraRevelations.size})",
+                    color = CyanNeon,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+            }
+            items(suspectExtraRevelations) { info ->
+                val isRedHerring = info.contains("DESPISTE", ignoreCase = true)
+                val borderCol = if (isRedHerring) AggressiveRed.copy(alpha = 0.5f) else CyanNeon.copy(alpha = 0.5f)
+                val bgCol = if (isRedHerring) Color(0xFF1A0A0A) else Color(0xFF0A1A1A)
+                val tagText = if (isRedHerring) "⚠️ HILO DE SOSPECHA" else "🔍 EVIDENCIA DIRECTA"
+                val tagCol = if (isRedHerring) AggressiveRed else CyanNeon
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, borderCol, RoundedCornerShape(8.dp)),
+                    colors = CardDefaults.cardColors(containerColor = bgCol)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = tagText,
+                            color = tagCol,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = info,
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+            item {
+                HorizontalDivider(color = Color.DarkGray, thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
+            }
+        }
+
+        item {
             Text(
-                text = "No has obtenido declaraciones formales de este sospechoso todavía.\nRealiza preguntas en la pestaña de Chat para archivar sus coartadas.",
-                color = Color.Gray,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 18.sp
+                text = "DECLARACIONES ARCHIVADAS (${suspectStatements.size})",
+                color = CyanNeon,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(bottom = 4.dp)
             )
         }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(top = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+
+        if (suspectStatements.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No has archivado declaraciones formales de este sospechoso.\nRealiza preguntas en el Chat para registrar sus coartadas.",
+                        color = Color.Gray,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        } else {
             items(suspectStatements) { stmt ->
                 Card(
                     modifier = Modifier.fillMaxWidth().border(1.dp, Color.DarkGray, RoundedCornerShape(6.dp)),
@@ -633,7 +887,7 @@ fun StatementsTabContent(suspect: Suspect, gameState: GameState) {
                         Text(
                             text = "\"${stmt.text}\"",
                             color = Color.White,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontFamily = FontFamily.Serif
                         )
                     }
@@ -643,127 +897,7 @@ fun StatementsTabContent(suspect: Suspect, gameState: GameState) {
     }
 }
 
-// ----------------------------------------------------
-// TAB 2: CONFRONTAR (DECLARACIÓN + EVIDENCIA)
-// ----------------------------------------------------
-@Composable
-fun ConfrontationTabContent(suspect: Suspect, gameState: GameState, viewModel: GameViewModel) {
-    val suspectStatements = gameState.statements.filter { it.suspectId == suspect.id }
-    val foundClues = gameState.discoveredClues
-
-    var selectedStatementId by remember { mutableStateOf<String?>(null) }
-    var selectedClueId by remember { mutableStateOf<String?>(null) }
-
-    Column(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
-        Text(
-            text = "PASO 1: SELECCIONA UNA DECLARACIÓN",
-            color = CyanNeon,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-        )
-
-        // Statements List
-        Box(modifier = Modifier.weight(0.45f).fillMaxWidth().padding(vertical = 4.dp)) {
-            if (suspectStatements.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No hay declaraciones archivadas de este sospechoso.", color = Color.Gray, fontSize = 12.sp)
-                }
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    items(suspectStatements) { stmt ->
-                        val isSelected = selectedStatementId == stmt.id
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(
-                                    1.dp,
-                                    if (isSelected) CyanNeon else Color.DarkGray.copy(alpha = 0.5f),
-                                    RoundedCornerShape(6.dp)
-                                )
-                                .clickable { selectedStatementId = stmt.id },
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) CyanNeon.copy(alpha = 0.1f) else PanelColor
-                            )
-                        ) {
-                            Text(
-                                text = "\"${stmt.text}\"",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(8.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "PASO 2: SELECCIONA LA EVIDENCIA CONTRADICTORIA",
-            color = neonYellow,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-        )
-
-        // Clues List
-        Box(modifier = Modifier.weight(0.45f).fillMaxWidth().padding(vertical = 4.dp)) {
-            if (foundClues.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No has recolectado evidencias en tu tablero todavía.", color = Color.Gray, fontSize = 12.sp)
-                }
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    items(foundClues) { clue ->
-                        val isSelected = selectedClueId == clue.id
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(
-                                    1.dp,
-                                    if (isSelected) neonYellow else Color.DarkGray.copy(alpha = 0.5f),
-                                    RoundedCornerShape(6.dp)
-                                )
-                                .clickable { selectedClueId = clue.id },
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) neonYellow.copy(alpha = 0.1f) else PanelColor
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(text = clue.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Text(text = "[${clue.locationName}]", color = Color.Gray, fontSize = 10.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Confront Action Button
-        Button(
-            onClick = {
-                if (selectedStatementId != null && selectedClueId != null) {
-                    viewModel.confrontStatementWithClue(selectedStatementId!!, selectedClueId!!)
-                    selectedStatementId = null
-                    selectedClueId = null
-                }
-            },
-            enabled = selectedStatementId != null && selectedClueId != null,
-            colors = ButtonDefaults.buttonColors(containerColor = CyanNeon, contentColor = Color.Black),
-            modifier = Modifier.fillMaxWidth().height(42.dp),
-            shape = RoundedCornerShape(4.dp)
-        ) {
-            Text("CONFRONTAR CON EVIDENCIA", fontWeight = FontWeight.Bold)
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-    }
-}
+// ConfrontationTabContent removed. Momentos Especiales are triggered dynamically now.
 
 // ----------------------------------------------------
 // TAB 3: COMPARAR TESTIMONIOS (SOSPECHOSO VS SOSPECHOSO)
@@ -970,13 +1104,17 @@ fun SuspectStatusCard(suspect: Suspect) {
 fun ConversationHistory(
     messages: List<InterrogationMessage>,
     suspectName: String,
+    isGenerating: Boolean,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    LaunchedEffect(messages.size, isGenerating) {
+        if (messages.isNotEmpty() || isGenerating) {
+            val targetIndex = if (isGenerating) messages.size else messages.size - 1
+            if (targetIndex >= 0) {
+                listState.animateScrollToItem(targetIndex)
+            }
         }
     }
 
@@ -1042,6 +1180,43 @@ fun ConversationHistory(
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 lineHeight = 20.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (isGenerating) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Surface(
+                        color = Color(0xFF141414),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            Color.White.copy(alpha = 0.08f)
+                        ),
+                        modifier = Modifier.widthIn(max = 240.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                color = CyanNeon,
+                                modifier = Modifier.size(10.dp),
+                                strokeWidth = 1.5.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Escribiendo...",
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace
                             )
                         }
                     }
@@ -1118,6 +1293,267 @@ fun SuspectSelectorRow(
             }
         }
     }
+}
+
+// ----------------------------------------------------
+// COMPOSABLE: MOMENTO ESPECIAL (OVERLAY MINIJUEGOS)
+// ----------------------------------------------------
+@Composable
+fun SpecialMomentOverlay(moment: SpecialMoment, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = { /* No dismiss on click outside to avoid losing state */ },
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false
+        ),
+        containerColor = Color(0xFF09090B),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.border(1.dp, neonYellow, RoundedCornerShape(12.dp)),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = when (moment) {
+                        is SpecialMoment.ReconstructConversation -> Icons.Default.Extension
+                        is SpecialMoment.RememberDetails -> Icons.Default.Psychology
+                        is SpecialMoment.PsychologicalProfile -> Icons.Default.Fingerprint
+                    },
+                    contentDescription = null,
+                    tint = neonYellow,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = when (moment) {
+                        is SpecialMoment.ReconstructConversation -> "RECONSTRUIR CONVERSACIÓN"
+                        is SpecialMoment.RememberDetails -> "RECORDAR DETALLES"
+                        is SpecialMoment.PsychologicalProfile -> "PERFIL PSICOLÓGICO"
+                    }.uppercase(),
+                    color = neonYellow,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF091A1E)),
+                    modifier = Modifier.fillMaxWidth().border(1.dp, CyanNeon.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = CyanNeon,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "OBJETIVO: ${moment.rewardText.uppercase()}",
+                            color = CyanNeon,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                Text(
+                    text = when (moment) {
+                        is SpecialMoment.ReconstructConversation -> "El sospechoso duda al narrar los hechos. Organiza cronológicamente sus frases para exponer inconsistencias."
+                        is SpecialMoment.RememberDetails -> "Analiza con atención el testimonio y responde correctamente a la pregunta de memoria para asegurar credibilidad."
+                        is SpecialMoment.PsychologicalProfile -> "Determina la actitud y estado mental del sospechoso a partir de sus respuestas y lenguaje no verbal."
+                    },
+                    color = Color.LightGray,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp
+                )
+
+                when (moment) {
+                    is SpecialMoment.ReconstructConversation -> {
+                        var currentSequence by remember { mutableStateOf(moment.scrambledSequence) }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            currentSequence.forEachIndexed { index, item ->
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = PanelColor),
+                                    modifier = Modifier.fillMaxWidth().border(1.dp, Color.DarkGray, RoundedCornerShape(6.dp))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = item,
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.weight(1f).padding(end = 8.dp)
+                                        )
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            IconButton(
+                                                onClick = {
+                                                    if (index > 0) {
+                                                        val newList = currentSequence.toMutableList()
+                                                        val temp = newList[index]
+                                                        newList[index] = newList[index - 1]
+                                                        newList[index - 1] = temp
+                                                        currentSequence = newList
+                                                    }
+                                                },
+                                                enabled = index > 0,
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(Icons.Default.ArrowUpward, contentDescription = null, tint = if (index > 0) CyanNeon else Color.Gray, modifier = Modifier.size(16.dp))
+                                            }
+
+                                            IconButton(
+                                                onClick = {
+                                                    if (index < currentSequence.size - 1) {
+                                                        val newList = currentSequence.toMutableList()
+                                                        val temp = newList[index]
+                                                        newList[index] = newList[index + 1]
+                                                        newList[index + 1] = temp
+                                                        currentSequence = newList
+                                                    }
+                                                },
+                                                enabled = index < currentSequence.size - 1,
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(Icons.Default.ArrowDownward, contentDescription = null, tint = if (index < currentSequence.size - 1) CyanNeon else Color.Gray, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    val success = currentSequence == moment.correctSequence
+                                    moment.onComplete(success)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black),
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text("COMPROBAR SECUENCIA", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    is SpecialMoment.RememberDetails -> {
+                        var selectedOption by remember { mutableStateOf<String?>(null) }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1206)),
+                                modifier = Modifier.fillMaxWidth().border(1.dp, neonYellow.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                            ) {
+                                Text(
+                                    text = "\"${moment.contextStatement}\"",
+                                    color = Color.LightGray,
+                                    fontSize = 11.sp,
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(text = moment.questionText, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                            moment.options.forEach { option ->
+                                val isSelected = selectedOption == option
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, if (isSelected) CyanNeon else Color.DarkGray, RoundedCornerShape(6.dp))
+                                        .clickable { selectedOption = option },
+                                    colors = CardDefaults.cardColors(containerColor = if (isSelected) CyanNeon.copy(alpha = 0.1f) else PanelColor)
+                                ) {
+                                    Text(
+                                        text = option,
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(10.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    if (selectedOption != null) {
+                                        val success = selectedOption == moment.correctOption
+                                        moment.onComplete(success)
+                                    }
+                                },
+                                enabled = selectedOption != null,
+                                colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black),
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text("CONFIRMAR RESPUESTA", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    is SpecialMoment.PsychologicalProfile -> {
+                        var selectedOption by remember { mutableStateOf<String?>(null) }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(text = moment.questionText, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                            moment.options.forEach { option ->
+                                val isSelected = selectedOption == option
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, if (isSelected) CyanNeon else Color.DarkGray, RoundedCornerShape(6.dp))
+                                        .clickable { selectedOption = option },
+                                    colors = CardDefaults.cardColors(containerColor = if (isSelected) CyanNeon.copy(alpha = 0.1f) else PanelColor)
+                                ) {
+                                    Text(
+                                        text = option,
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(10.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    if (selectedOption != null) {
+                                        val success = selectedOption == moment.correctOption
+                                        moment.onComplete(success)
+                                    }
+                                },
+                                enabled = selectedOption != null,
+                                colors = ButtonDefaults.buttonColors(containerColor = neonYellow, contentColor = Color.Black),
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text("CONFIRMAR PERFILADO", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { /* Handled internally by buttons */ }
+    )
 }
 
 
