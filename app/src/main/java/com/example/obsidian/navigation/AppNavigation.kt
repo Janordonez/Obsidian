@@ -25,7 +25,7 @@ fun AppNavigation(
         composable(Screen.Case.route) {
             MainMenu(
                 isGenerating = viewModel.isGenerating,
-                onNewInvestigation = { 
+                onNewInvestigation = {
                     viewModel.startNewInvestigation()
                     navController.navigate(Screen.Map.route)
                 },
@@ -33,20 +33,20 @@ fun AppNavigation(
                 onSettings = { navController.navigate(Screen.Settings.route) }
             )
         }
-        composable(Screen.Clue.route) { 
-            ClueScreen(navController, viewModel, Modifier.padding(innerPadding)) 
+        composable(Screen.Clue.route) {
+            ClueScreen(navController, viewModel, Modifier.padding(innerPadding))
         }
-        composable(Screen.Evidence.route) { 
+        composable(Screen.Evidence.route) {
             EvidenceScreen(navController, viewModel, Modifier.padding(innerPadding))
         }
-        composable(Screen.Interrogation.route) { 
-            InterrogationScreen(navController, viewModel, Modifier.padding(innerPadding)) 
+        composable(Screen.Interrogation.route) {
+            InterrogationScreen(navController, viewModel, Modifier.padding(innerPadding))
         }
-        composable(Screen.Map.route) { 
+        composable(Screen.Map.route) {
             MapScreen(navController, viewModel, Modifier.padding(innerPadding))
         }
-        composable(Screen.Settings.route) { 
-            SettingsScreen(navController, viewModel, Modifier.padding(innerPadding)) 
+        composable(Screen.Settings.route) {
+            SettingsScreen(navController, viewModel, Modifier.padding(innerPadding))
         }
         composable(Screen.Accusation.route) {
             AccusationScreen(navController, viewModel, Modifier.padding(innerPadding))

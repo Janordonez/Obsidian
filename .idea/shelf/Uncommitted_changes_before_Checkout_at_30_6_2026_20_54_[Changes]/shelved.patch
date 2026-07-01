@@ -1,0 +1,29 @@
+Index: .idea/shelf/Uncommitted_changes_before_Checkout_at_22_6_2026_18_12__Changes_.xml
+===================================================================
+diff --git a/.idea/shelf/Uncommitted_changes_before_Checkout_at_22_6_2026_18_12__Changes_.xml b/.idea/shelf/Uncommitted_changes_before_Checkout_at_22_6_2026_18_12__Changes_.xml
+deleted file mode 100644
+--- a/.idea/shelf/Uncommitted_changes_before_Checkout_at_22_6_2026_18_12__Changes_.xml	(revision ecbc145e9d8778ce3f13b4c8813e711d1af3c3dc)
++++ /dev/null	(revision ecbc145e9d8778ce3f13b4c8813e711d1af3c3dc)
+@@ -1,4 +0,0 @@
+-<changelist name="Uncommitted_changes_before_Checkout_at_22_6_2026_18_12_[Changes]" date="1782173570159" recycled="true" deleted="true">
+-  <option name="PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_22_6_2026_18_12_[Changes]/shelved.patch" />
+-  <option name="DESCRIPTION" value="Uncommitted changes before Checkout at 22/6/2026 18:12 [Changes]" />
+-</changelist>
+\ No newline at end of file
+Index: .idea/misc.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"ExternalStorageConfigurationManager\" enabled=\"true\" />\r\n  <component name=\"ProjectRootManager\" version=\"2\" languageLevel=\"JDK_21\" default=\"true\" project-jdk-name=\"jbr-21\" project-jdk-type=\"JavaSDK\" />\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/misc.xml b/.idea/misc.xml
+--- a/.idea/misc.xml	(revision ecbc145e9d8778ce3f13b4c8813e711d1af3c3dc)
++++ b/.idea/misc.xml	(date 1782874362651)
+@@ -1,4 +1,3 @@
+-<?xml version="1.0" encoding="UTF-8"?>
+ <project version="4">
+   <component name="ExternalStorageConfigurationManager" enabled="true" />
+   <component name="ProjectRootManager" version="2" languageLevel="JDK_21" default="true" project-jdk-name="jbr-21" project-jdk-type="JavaSDK" />
+diff --git a/.idea/shelf/Uncommitted_changes_before_Checkout_at_22_6_2026_18_12_[Changes]/shelved.patch b/.idea/shelf/Uncommitted_changes_before_Checkout_at_22_6_2026_18_12_[Changes]/shelved.patch
+deleted file mode 100644

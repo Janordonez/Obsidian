@@ -17,7 +17,7 @@ interface GroqApi {
 data class GroqRequest(
     val model: String = "llama-3.3-70b-versatile",
     val messages: List<GroqMessage>,
-    val temperature: Float = 0.7f,
+    val temperature: Float = 0.5f,
     val response_format: GroqResponseFormat? = null
 )
 
